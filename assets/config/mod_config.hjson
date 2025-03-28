@@ -1,0 +1,51 @@
+{
+  "configVersion": 0,
+
+  //=====Basic/基础设置=====//
+
+  //主菜单界面否显示为替换后的星图背景
+  "mainMenuUniverseBackground": true,
+  //主菜单界面的背景是否为静态渲染的星图，仅在启用星图背景的请胯下有效
+  "staticMainMenuBackground": false,
+  //渲染星图背景时的默认视角位置，在开启星图背景时有效 [x, y, z, rx, ry]
+  "defaultCameraPos": [
+    10,
+    0,
+    15,
+    0,
+    0
+  ],
+  //主菜单背景的视角能移动，启用背景且非静态背景时有效
+  "movementCamera": true,
+
+  //--target info/局内目标信息设置--
+  //信息显示器开关
+  "showInfos": true,
+  //状态指示器的透明度
+  "statusInfoAlpha": 1,
+  //目标显示刷新间隔（单位：刻）
+  "flushInterval": 1,
+  //最大同时显示的目标数量
+  "maxDisplay": 16,
+  //对象信息显示缩放
+  "showInfoScl": 1,
+  //范围显示模式下，选择目标半径（屏幕坐标系下的半径）
+  "holdDisplayRange": 320,
+  //--生命显示器
+  //生命指示器边框风格
+  "healthBarStyle": "mindustry",
+  //--状态指示器
+  //状态图标尺寸
+  "statusSize": 6,
+  //显示时长
+  "showStatusTime": true,
+
+  //===Graphic/图形设置===//
+
+  //启用UI模糊视效
+  "enableBlur": true,
+  //模糊度
+  "blurLevel": 4,
+  //模糊强度
+  "backBlurLen": 1.25,
+}

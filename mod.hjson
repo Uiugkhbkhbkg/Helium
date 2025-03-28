@@ -4,6 +4,6 @@
   author: "EBwilson",
   main: "helium.Helium",
   description: "A mod provide optimized ui, (only blur background yet)",
-  version: 1.0,
+  version: 0.1,
   minGameVersion: 146
 }
