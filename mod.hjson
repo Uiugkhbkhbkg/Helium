@@ -1,0 +1,9 @@
+{
+  displayName: "Helium",
+  name: "he",
+  author: "EBwilson",
+  main: "helium.Helium",
+  description: "A mod provide optimized ui, (only blur background yet)",
+  version: 1.0,
+  minGameVersion: 146
+}
