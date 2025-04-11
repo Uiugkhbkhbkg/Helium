@@ -48,7 +48,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   lateinit var style: HealthBarStyle
 
   override val layoutSide: Side = Side.TOP
-  override fun valid(entity: Entityc) = entity is Healthc
+  override fun valid(entity: Posc) = entity is Healthc
   override fun HealthModel.shouldDisplay() = true
 
   override fun HealthModel.realWidth(prefSize: Float) = prefSize

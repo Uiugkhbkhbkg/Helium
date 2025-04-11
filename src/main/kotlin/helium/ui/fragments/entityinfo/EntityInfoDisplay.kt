@@ -5,10 +5,7 @@ import arc.func.Prov
 import arc.math.geom.Vec2
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
-import com.oracle.graal.compiler.enterprise.phases.strings.u.it
-import mindustry.gen.Entityc
 import mindustry.gen.Posc
-import mindustry.mod.Mod
 
 @Suppress("UNCHECKED_CAST")
 abstract class EntityInfoDisplay<M: Model<*>>(

@@ -11,6 +11,7 @@ import helium.ui.dialogs.ConfigSlider
 import helium.ui.dialogs.ModConfigDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
+import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
 import mindustry.gen.Icon
 import mindustry.graphics.Pal
@@ -43,6 +44,7 @@ object He {
 
   lateinit var entityInfo: EntityInfoFrag
   lateinit var healthBarDisplay: HealthDisplay
+  lateinit var statusDisplay: StatusDisplay
 
   lateinit var configDialog: ModConfigDialog
 
@@ -83,6 +85,7 @@ object He {
 
   private fun setupDisplays(infos: EntityInfoFrag) {
     infos.addDisplay(HealthDisplay().also { healthBarDisplay = it })
+    infos.addDisplay(StatusDisplay().also { statusDisplay = it })
 
     healthBarDisplay.style = HeStyles.test
   }
