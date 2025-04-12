@@ -26,6 +26,7 @@ object HeStyles {
   lateinit var heIcon: Drawable
   lateinit var transparent: Drawable
   lateinit var grayUIAlpha: Drawable
+  lateinit var padGrayUIAlpha: Drawable
 
   lateinit var transparentBack: DialogStyle
 
@@ -74,6 +75,12 @@ object HeStyles {
 
     transparent = (Tex.whiteui as TextureRegionDrawable).tint(Color.clear)
     grayUIAlpha = (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))
+    padGrayUIAlpha = ((Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))).also {
+      it.leftWidth = 8f
+      it.rightWidth = 8f
+      it.topHeight = 8f
+      it.bottomHeight = 8f
+    }
 
     transparentBack = object : DialogStyle() {
       init {

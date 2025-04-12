@@ -10,6 +10,7 @@ import helium.ui.dialogs.ConfigSepLine
 import helium.ui.dialogs.ConfigSlider
 import helium.ui.dialogs.ModConfigDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
+import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
@@ -45,6 +46,7 @@ object He {
   lateinit var entityInfo: EntityInfoFrag
   lateinit var healthBarDisplay: HealthDisplay
   lateinit var statusDisplay: StatusDisplay
+  lateinit var detailsDisplay: DetailsDisplay
 
   lateinit var configDialog: ModConfigDialog
 
@@ -83,9 +85,15 @@ object He {
     Styles.defaultDialog.stageBackground = if (config.enableBlur) HeStyles.BLUR_BACK else Styles.black9
   }
 
+  fun drawWorld() {
+    entityInfo.drawWorld()
+  }
+
   private fun setupDisplays(infos: EntityInfoFrag) {
     infos.addDisplay(HealthDisplay().also { healthBarDisplay = it })
     infos.addDisplay(StatusDisplay().also { statusDisplay = it })
+
+    infos.addDisplay(DetailsDisplay().also { detailsDisplay = it })
 
     healthBarDisplay.style = HeStyles.test
   }

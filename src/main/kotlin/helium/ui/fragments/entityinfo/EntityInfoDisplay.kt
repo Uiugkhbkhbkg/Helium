@@ -1,8 +1,7 @@
 package helium.ui.fragments.entityinfo
 
-import arc.Core
 import arc.func.Prov
-import arc.math.geom.Vec2
+import arc.scene.Element
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
 import mindustry.gen.Posc
@@ -20,26 +19,26 @@ abstract class EntityInfoDisplay<M: Model<*>>(
     } as M
 
   abstract val layoutSide: Side
-  abstract fun valid(entity: Posc): Boolean
+  open val hoveringOnly: Boolean get() = false
+  open fun M?.checkHovering(isHovered: Boolean) = isHovered
 
+  open fun M.drawWorld(alpha: Float){}
+
+  abstract fun valid(entity: Posc): Boolean
   abstract val M.prefWidth: Float
   abstract val M.prefHeight: Float
-  abstract fun M.shouldDisplay(): Boolean
+  open fun M.shouldDisplay() = true
   abstract fun M.realWidth(prefSize: Float): Float
   abstract fun M.realHeight(prefSize: Float): Float
   abstract fun M.update(delta: Float)
   abstract fun M.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float)
 }
 
-abstract class Model<E: Posc>: Poolable{
+abstract class Model<E: Any>: Poolable{
   lateinit var entity: E
+  lateinit var element: Element
 
   abstract fun setup(ent: E)
-
-  val x: Float get() = entity.x
-  val y: Float get() = entity.y
-
-  val drawPos: Vec2 get() = Core.camera.project(x, y)
 }
 
 enum class Side(val dir: Int){
@@ -56,3 +55,20 @@ abstract class NoneModelDisplay<T: Posc>: EntityInfoDisplay<Model<T>>(modelProv 
     override fun reset() {}
   }
 })
+
+abstract class WorldDrawOnlyDisplay<M: Model<*>>(modelProv: Prov<M>): EntityInfoDisplay<M>(modelProv) {
+  override val layoutSide: Side get() = Side.CENTER
+  override val M.prefWidth: Float get() = 0f
+  override val M.prefHeight: Float get() = 0f
+  override fun M.realWidth(prefSize: Float) = 0f
+  override fun M.realHeight(prefSize: Float) = 0f
+  override fun M.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {}
+  override fun M.drawWorld(alpha: Float) {
+    draw(alpha)
+  }
+  abstract fun M.draw(alpha: Float)
+}
+
+interface InputEventChecker<T: Model<*>> {
+  fun T.buildListener(): Element
+}

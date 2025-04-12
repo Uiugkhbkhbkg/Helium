@@ -49,7 +49,6 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
   override val layoutSide: Side = Side.TOP
   override fun valid(entity: Posc) = entity is Healthc
-  override fun HealthModel.shouldDisplay() = true
 
   override fun HealthModel.realWidth(prefSize: Float) = prefSize
   override fun HealthModel.realHeight(prefSize: Float) = prefHeight
@@ -117,7 +116,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     style.shieldBar?.also {
       val n = Mathf.ceil(insectShield/entity.maxHealth())
       val insProgShield = (insectShield%entity.maxHealth())/entity.maxHealth()
-      val r = Mathf.absin(8f, 0.5f)
+      val r = if (Vars.state.isPaused) 1f else Mathf.absin(8f, 0.5f)
 
       if (n > 1) {
         Draw.color(shieldColor(teamC, n - 1), alpha*(1f - r))

@@ -3,7 +3,6 @@ package helium
 import arc.Core
 import arc.Events
 import arc.files.Fi
-import arc.graphics.g2d.Draw
 import arc.graphics.g2d.TextureRegion
 import arc.scene.style.Drawable
 import helium.graphics.ScreenSampler
@@ -20,6 +19,7 @@ class Helium : Mod() {
 
     He.init()
     Events.run(EventType.Trigger.update) { He.update() }
+    Events.run(EventType.Trigger.draw) { He.drawWorld() }
   }
 
   companion object {
