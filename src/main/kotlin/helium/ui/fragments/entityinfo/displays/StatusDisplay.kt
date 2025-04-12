@@ -21,14 +21,16 @@ import kotlin.math.max
 private val iconSize = Scl.scl(26f)
 private val iconPadding = Scl.scl(4f)
 
-class StatusModel: Model<Statusc>(){
-  var singleWidth = 1f
+class StatusModel: Model<Statusc>{
+  override lateinit var entity: Statusc
 
+  var singleWidth = 1f
   val statusList = Seq<StatusEffect>()
 
   override fun setup(ent: Statusc) {
     singleWidth = iconSize
   }
+
   override fun reset() {
     statusList.clear()
     singleWidth = iconSize

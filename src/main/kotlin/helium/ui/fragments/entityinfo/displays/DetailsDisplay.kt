@@ -6,13 +6,16 @@ import arc.scene.Element
 import arc.scene.ui.layout.Table
 import helium.ui.HeStyles
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
+import helium.ui.fragments.entityinfo.InputCheckerModel
 import helium.ui.fragments.entityinfo.InputEventChecker
-import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
 import mindustry.gen.Posc
 import mindustry.ui.Displayable
 
-class DetailsModel: Model<Displayable>() {
+class DetailsModel: InputCheckerModel<Displayable> {
+  override lateinit var element: Element
+  override lateinit var entity: Displayable
+
   var fadeOut = 0f
   var hovering = false
 
@@ -44,6 +47,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
   }
 
   override fun valid(entity: Posc) = entity is Displayable
+
   override fun DetailsModel?.checkHovering(isHovered: Boolean): Boolean {
     if (this != null) {
       if (isHovered) {

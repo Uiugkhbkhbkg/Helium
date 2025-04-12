@@ -30,8 +30,7 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
   @ConfigItem(order = 3) var blurSpace = 0f
 
   @ConfigItem(order = 4) var entityInfoFlushInterval = 0f
-  @ConfigItem(order = 5) var entityInfoLimit = 0
-  @ConfigItem(order = 6) var entityInfoScale = 0f
+  @ConfigItem(order = 5) var entityInfoScale = 0f
 
   fun load() {
     if (!configFile.exists()) {

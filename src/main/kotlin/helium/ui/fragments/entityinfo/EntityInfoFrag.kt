@@ -38,9 +38,9 @@ class EntityInfoFrag {
   private val displays = Seq<EntityInfoDisplay<Model<*>>>()
 
   private val displayQueue = OrderedSet<EntityEntry>()
-    .apply{ orderedItems().ordered = false }
 
   private var delta = 0f
+  private var infoAlpha = 1f
 
   private val hovering = OrderedSet<EntityEntry>()
   private val currHov = OrderedSet<EntityEntry>()
@@ -48,6 +48,9 @@ class EntityInfoFrag {
   private var selecting = false
   private val selectStart = Vec2()
   private val selectionRect = Rect()
+
+  private val worldViewport = Rect()
+  private val screenViewport = Rect()
 
   private lateinit var infoFill: Group
 
@@ -111,6 +114,17 @@ class EntityInfoFrag {
   }
 
   fun drawWorld(){
+    Core.camera.bounds(worldViewport)
+
+    worldViewport.also {
+      val bl = it.getPosition(Tmp.v1)
+      val tr = Tmp.v2.set(it.x + it.width, it.y + it.height)
+      Core.camera.project(bl)
+      Core.camera.project(tr)
+      tr.sub(bl)
+      screenViewport.set(bl.x, bl.y, tr.x, tr.y)
+    }
+
     val rect = selectionRect
     if (selecting && rect.width > 0 && rect.height > 0) {
       Draw.z(Layer.overlayUI)
@@ -160,13 +174,14 @@ class EntityInfoFrag {
         )
       }
 
-      e.display.forEach { entry ->
+      e.display.forEach r@{ entry ->
         val display = entry.key
         val model = entry.value
 
         display.apply {
-          if (model.shouldDisplay()) {
-            model.drawWorld(e.alpha)
+          if ((hoveringOnly && !model.checkHovering(hovering.contains(e))) || !model.shouldDisplay()) return@r
+          if (model.checkWorldClip(worldViewport) && model.shouldDisplay()) {
+            model.drawWorld(infoAlpha*e.alpha)
           }
         }
       }
@@ -195,50 +210,52 @@ class EntityInfoFrag {
     }
 
     currHov.clear()
+
     Groups.all.forEach { entity ->
-      if (entity is Posc && checkShowing(entity)) {
-        val e = tempEntry
-        e.entity = entity
-        e.showing = true
-        e.alpha = 0f
+      if (entity !is Posc) return@forEach
 
-        val ent = displayQueue.get(e)
-        if (ent == null) {
-          val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
-          entry.entity = entity
-          entry.showing = true
+      val e = tempEntry
+      e.entity = entity
 
-          displays.forEach { display ->
-            if (display.valid(entity)) {
-              entry.display.put(
-                display,
-                if(display.hoveringOnly) null
-                else {
-                  val model = (display as EntityInfoDisplay<*>).obtainModel(entity)
-                  if (display is InputEventChecker<*>){
-                    display as InputEventChecker<Model<*>>
-                    model.element = display.run { model.buildListener().also { infoFill.addChild(it) } }
-                  }
-                  model
+      val ent = displayQueue.get(e)
+      if (ent == null) {
+        val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
+        entry.entity = entity
+
+        displays.forEach { display ->
+          if (display.valid(entity)) {
+            entry.display.put(
+              display,
+              if(display.hoveringOnly) null
+              else {
+                val model = (display as EntityInfoDisplay<*>).obtainModel(entity)
+                if (display is InputEventChecker<*>){
+                  display as InputEventChecker<InputCheckerModel<*>>
+                  model as InputCheckerModel<*>
+                  model.element = display.run { model.buildListener().also { infoFill.addChild(it) } }
                 }
-              )
-            }
-          }
-
-          if (entry.display.isEmpty) Pools.free(entry)
-          else {
-            displayQueue.add(entry)
-
-            if (checkHovering(entity)) {
-              currHov.add(entry)
-            }
+                model
+              }
+            )
           }
         }
+
+        if (entry.display.isEmpty) Pools.free(entry)
         else {
-          ent.showing = true
+          entry.showing = true
+
+          displayQueue.add(entry)
+
           if (checkHovering(entity)) {
-            currHov.add(ent)
+            currHov.add(entry)
           }
+        }
+      }
+      else {
+        ent.showing = true
+
+        if (checkHovering(entity)) {
+          currHov.add(ent)
         }
       }
     }
@@ -259,24 +276,22 @@ class EntityInfoFrag {
       selectionRect.set(0f, 0f, 0f, 0f)
     }
 
-    if (!displayQueue.isEmpty) displayQueue.orderedItems()
-      .sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(Core.input.mouseWorld()) }
-
     val itr = displayQueue.iterator()
-    var count = 0
     while (itr.hasNext()) {
       val entry = itr.next()
-      if (!entry.showing || count > config.entityInfoLimit) entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
+      if (!entry.showing && !hovering.contains(entry)) entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
       else entry.alpha = 1f
 
       entry.showing = false
-      count++
 
       if (entry.alpha <= 0.001f) {
         itr.remove()
         Pools.free(entry)
       }
     }
+
+    if (!displayQueue.isEmpty) displayQueue.orderedItems()
+      .sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(Core.input.mouseWorld()) }
   }
 
   private fun checkHovering(entity: Posc): Boolean {
@@ -301,19 +316,15 @@ class EntityInfoFrag {
     }
   }
 
-  private fun checkShowing(entity: Posc): Boolean {
-    return true
-  }
-
   @Suppress("UNCHECKED_CAST")
   private fun update(delta: Float) {
     displayQueue.reversed().forEach { e -> e.display.forEach r@{ it.key.apply {
-      val hov = it.value.checkHovering(hovering.contains(e))
-      if (hoveringOnly && !hov) return@r
+      if (!it.value.checkHovering(hovering.contains(e)) && hoveringOnly) return@r
       if (it.value == null){
         val model = obtainModel(e.entity)
         if (this is InputEventChecker<*>){
-          this as InputEventChecker<Model<*>>
+          this as InputEventChecker<InputCheckerModel<*>>
+          model as InputCheckerModel
           model.element = model.buildListener().also { elem -> infoFill.addChild(elem) }
         }
         e.display.put(it.key, model)
@@ -337,12 +348,21 @@ class EntityInfoFrag {
       var rightHeight = 0f
       var centerWith = 0f
       var centerHeight = 0f
+
+      val origin = Core.camera.project(e.entity.x, e.entity.y)
+      val origX = origin.x
+      val origY = origin.y
+
+      val alpha = infoAlpha*e.alpha
       e.display.forEach f@{ entry ->
         val display = entry.key
         val model = entry.value?: return@f
 
         display.apply {
-          if (!model.shouldDisplay()) return@f
+          if (
+            (hoveringOnly && !model.checkHovering(hovering.contains(e)))
+            || !model.shouldDisplay()
+          ) return@f
           when (display.layoutSide) {
             CENTER -> {
               centerWith = max(model.prefWidth, centerWith)
@@ -355,10 +375,6 @@ class EntityInfoFrag {
           }
         }
       }
-
-      val origin = Core.camera.project(e.entity!!.x, e.entity!!.y)
-      val origX = origin.x
-      val origY = origin.y
 
       val sizeOrig = Core.camera.project(0f, 0f).x
       val sizeOff = Core.camera.project(e.size, 0f).x - sizeOrig
@@ -373,41 +389,53 @@ class EntityInfoFrag {
         val oy = origY + offset.y
 
         display.apply {
-          if ((hoveringOnly && !model.checkHovering(hovering.contains(e))) || !model.shouldDisplay()) return@f
-          val elem = if (display is InputEventChecker<*>) model.element else null
+          if (
+            (hoveringOnly && !model.checkHovering(hovering.contains(e)))
+            || !model.shouldDisplay()
+          ) return@f
+          val elem = if (display is InputEventChecker<*> && model is InputCheckerModel) model.element else null
           when (layoutSide) {
             CENTER -> {
               val disW = centerWith*scale
               val disH = centerHeight*scale
               elem?.setBounds(ox, oy, disW, disH)
-              model.draw(e.alpha, scale, ox - disW/2, oy - disH/2, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH/2, disW, disH))
+                model.draw(alpha, scale, ox - disW/2, oy - disH/2, disW, disH)
             }
             RIGHT -> {
               val disW = model.realWidth(rightHeight)
               val disH = model.realHeight(rightHeight)
               elem?.setBounds(ox + offsetRight, oy - disH/2, disW, disH)
-              model.draw(e.alpha, scale, ox + offsetRight, oy - disH/2, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
+                model.draw(alpha, scale, ox + offsetRight, oy - disH/2, disW, disH)
+
               offsetRight += disW*scale
             }
             TOP -> {
               val disW = model.realWidth(topWidth)
               val disH = model.realHeight(topWidth)
               elem?.setBounds(ox - disW/2, oy + offsetTop, disW, disH)
-              model.draw(e.alpha, scale, ox - disW/2, oy + offsetTop, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop, disW, disH))
+                model.draw(alpha, scale, ox - disW/2, oy + offsetTop, disW, disH)
+
               offsetTop += disH*scale
             }
             LEFT -> {
               val disW = model.realWidth(leftHeight)
               val disH = model.realHeight(leftHeight)
               elem?.setBounds(ox - disW - offsetLeft, oy - disH/2, disW, disH)
-              model.draw(e.alpha, scale, ox - disW - offsetLeft, oy - disH/2, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
+                model.draw(alpha, scale, ox - disW - offsetLeft, oy - disH/2, disW, disH)
+
               offsetLeft += disW*scale
             }
             BOTTOM -> {
               val disW = model.realWidth(bottomWidth)
               val disH = model.realHeight(bottomWidth)
               elem?.setBounds(ox - disW/2, oy - disH - offsetBottom, disW, disH)
-              model.draw(e.alpha, scale, ox - disW/2, oy - disH - offsetBottom, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))
+                model.draw(alpha, scale, ox - disW/2, oy - disH - offsetBottom, disW, disH)
+
               offsetBottom += disH*scale
             }
           }
@@ -415,37 +443,40 @@ class EntityInfoFrag {
       }
     }
   }
+}
 
-  class EntityEntry : Poolable {
-    lateinit var entity: Posc
-    var alpha = 0f
-    var showing = false
+class EntityEntry : Poolable {
+  lateinit var entity: Posc
+  var alpha = 0f
+  var showing = false
 
-    val display = OrderedMap<EntityInfoDisplay<Model<*>>, Model<*>>()
+  val display = OrderedMap<EntityInfoDisplay<Model<*>>, Model<*>>()
 
-    val size: Float get() = entity.let {
-      when (it) {
-        is Hitboxc -> it.hitSize()/1.44f
-        is Buildingc -> it.block().size*Vars.tilesize/2f
-        else -> 10f
+  val size: Float get() = entity.let {
+    when (it) {
+      is Hitboxc -> it.hitSize()/1.44f
+      is Buildingc -> it.block().size*Vars.tilesize/2f
+      else -> 10f
+    }
+  }
+
+  override fun reset() {
+    display.values().forEach {
+      if (it != null) {
+        if (it is InputCheckerModel) it.element.remove()
+        Pools.free(it)
       }
-    } ?: 0f
-
-    override fun reset() {
-      alpha = 0f
-      showing = false
-      display.values().forEach { if (it != null) Pools.free(it) }
-      display.clear()
     }
+    display.clear()
+  }
 
-    override fun equals(other: Any?): Boolean {
-      if (this === other) return true
-      if (other !is EntityEntry) return false
-      return entity === other.entity
-    }
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is EntityEntry) return false
+    return entity === other.entity
+  }
 
-    override fun hashCode(): Int {
-      return entity.hashCode()
-    }
+  override fun hashCode(): Int {
+    return entity.hashCode()
   }
 }

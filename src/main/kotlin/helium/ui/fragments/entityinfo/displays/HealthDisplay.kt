@@ -19,10 +19,13 @@ import mindustry.graphics.Pal
 import mindustry.ui.Fonts
 import kotlin.math.max
 
-class HealthModel: Model<Healthc>(){
+class HealthModel: Model<Healthc>{
+  override lateinit var entity: Healthc
+
   var detailWidth = 0f
   var shieldWidth = 0f
-  var scaledTextPadding = 0f
+
+  var hovering = false
 
   val detailBuff = StringBuilder()
   val shieldBuff = StringBuilder()
@@ -41,6 +44,7 @@ class HealthModel: Model<Healthc>(){
   override fun reset() {
     insectHealth = 0f
     insectShield = 0f
+    hovering = false
   }
 }
 
@@ -66,6 +70,12 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     }
   }
   override val HealthModel.prefHeight: Float get() = style.height
+
+  override fun HealthModel?.checkHovering(isHovered: Boolean): Boolean {
+    this?.hovering = isHovered
+    return isHovered
+  }
+  override fun HealthModel.shouldDisplay() = entity !is Buildingc || hovering
 
   override fun HealthModel.update(delta: Float) {
     updateText()
@@ -116,7 +126,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     style.shieldBar?.also {
       val n = Mathf.ceil(insectShield/entity.maxHealth())
       val insProgShield = (insectShield%entity.maxHealth())/entity.maxHealth()
-      val r = if (Vars.state.isPaused) 1f else Mathf.absin(8f, 0.5f)
+      val r = if (Vars.state.isPaused) 0f else Mathf.absin(8f, 0.5f)
 
       if (n > 1) {
         Draw.color(shieldColor(teamC, n - 1), alpha*(1f - r))
@@ -140,7 +150,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     }
 
     style.foreground?.also {
-      Draw.color(c1.set(style.backgroundColor).mulA(alpha))
+      Draw.color(c1.set(style.foregroundColor).mulA(alpha))
       it.draw(
         origX, origY, 0f, 0f,
         drawW, drawH, scale, scale, 0f,

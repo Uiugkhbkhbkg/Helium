@@ -1,9 +1,12 @@
 package helium.ui.fragments.entityinfo
 
 import arc.func.Prov
+import arc.math.geom.Rect
 import arc.scene.Element
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
+import mindustry.gen.Buildingc
+import mindustry.gen.Drawc
 import mindustry.gen.Posc
 
 @Suppress("UNCHECKED_CAST")
@@ -20,11 +23,25 @@ abstract class EntityInfoDisplay<M: Model<*>>(
 
   abstract val layoutSide: Side
   open val hoveringOnly: Boolean get() = false
-  open fun M?.checkHovering(isHovered: Boolean) = isHovered
-
-  open fun M.drawWorld(alpha: Float){}
 
   abstract fun valid(entity: Posc): Boolean
+
+  open fun M?.checkHovering(isHovered: Boolean) = isHovered
+  open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {
+    val clipSize = when(it){
+      is Drawc -> it.clipSize()
+      is Buildingc -> it.block().clipSize
+      else -> 10f
+    }
+    worldViewport.overlaps(it.x - clipSize/2, it.y - clipSize/2, clipSize, clipSize)
+  }
+  open fun M.checkScreenClip(screenViewport: Rect, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) =
+    screenViewport.overlaps(
+      origX, origY,
+      drawWidth, drawHeight
+    )
+  open fun M.drawWorld(alpha: Float){}
+
   abstract val M.prefWidth: Float
   abstract val M.prefHeight: Float
   open fun M.shouldDisplay() = true
@@ -34,11 +51,9 @@ abstract class EntityInfoDisplay<M: Model<*>>(
   abstract fun M.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float)
 }
 
-abstract class Model<E: Any>: Poolable{
-  lateinit var entity: E
-  lateinit var element: Element
-
-  abstract fun setup(ent: E)
+interface Model<E: Any>: Poolable{
+  var entity: E
+  fun setup(ent: E)
 }
 
 enum class Side(val dir: Int){
@@ -50,7 +65,8 @@ enum class Side(val dir: Int){
 }
 
 abstract class NoneModelDisplay<T: Posc>: EntityInfoDisplay<Model<T>>(modelProv = Prov {
-  object : Model<T>() {
+  object : Model<T> {
+    override lateinit var entity: T
     override fun setup(ent: T) {}
     override fun reset() {}
   }
@@ -69,6 +85,10 @@ abstract class WorldDrawOnlyDisplay<M: Model<*>>(modelProv: Prov<M>): EntityInfo
   abstract fun M.draw(alpha: Float)
 }
 
-interface InputEventChecker<T: Model<*>> {
+interface InputCheckerModel<E: Any>: Model<E> {
+  var element: Element
+}
+
+interface InputEventChecker<T: InputCheckerModel<*>>{
   fun T.buildListener(): Element
 }

@@ -2,19 +2,23 @@ package helium
 
 import arc.Core
 import arc.files.Fi
+import arc.graphics.g2d.Draw
 import arc.scene.ui.layout.Table
 import helium.graphics.HeShaders
+import helium.graphics.g2d.AttackRangeExtractor
 import helium.ui.HeStyles
 import helium.ui.dialogs.ConfigCheck
 import helium.ui.dialogs.ConfigSepLine
 import helium.ui.dialogs.ConfigSlider
 import helium.ui.dialogs.ModConfigDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
+import helium.ui.fragments.entityinfo.displays.AttackRangeDisplay
 import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
 import mindustry.gen.Icon
+import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.mod.Mods.LoadedMod
 import mindustry.ui.Styles
@@ -47,6 +51,9 @@ object He {
   lateinit var healthBarDisplay: HealthDisplay
   lateinit var statusDisplay: StatusDisplay
   lateinit var detailsDisplay: DetailsDisplay
+  lateinit var attackRangeDisplay: AttackRangeDisplay
+
+  lateinit var attackRenderer: AttackRangeExtractor
 
   lateinit var configDialog: ModConfigDialog
 
@@ -63,6 +70,8 @@ object He {
     entityInfo = EntityInfoFrag()
     entityInfo.build(Vars.ui.hudGroup)
     setupDisplays(entityInfo)
+
+    attackRenderer = AttackRangeExtractor()
 
     configDialog = ModConfigDialog()
     setupSettings(configDialog)
@@ -87,6 +96,12 @@ object He {
 
   fun drawWorld() {
     entityInfo.drawWorld()
+
+    Draw.drawRange(Layer.light - 2, 0.5f, {
+      attackRenderer.capture()
+    }) {
+      attackRenderer.render()
+    }
   }
 
   private fun setupDisplays(infos: EntityInfoFrag) {
@@ -94,6 +109,7 @@ object He {
     infos.addDisplay(StatusDisplay().also { statusDisplay = it })
 
     infos.addDisplay(DetailsDisplay().also { detailsDisplay = it })
+    infos.addDisplay(AttackRangeDisplay().also { attackRangeDisplay = it })
 
     healthBarDisplay.style = HeStyles.test
   }

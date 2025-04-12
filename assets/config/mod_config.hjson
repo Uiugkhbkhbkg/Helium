@@ -12,8 +12,6 @@
 
   //实体信息刷新间隔
   "entityInfoFlushInterval": -1,
-  //最大信息显示个数
-  "entityInfoLimit": 32,
   //信息显示缩放
   "entityInfoScale": 1.0,
 }
