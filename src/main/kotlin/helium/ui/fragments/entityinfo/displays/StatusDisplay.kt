@@ -61,14 +61,13 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
     var offX = 0f
     var offY = 0f
 
-    val drawW = drawWidth*scale
     val singW = singleWidth*scale
 
     var newSingleW = 0f
 
     var rh = iconSize
     statusList.forEach { eff ->
-      if (offX + singW >= drawW) {
+      if (offX + singW >= drawWidth) {
         offX = iconPadding
         offY += iconSize*scale
         rh += (iconSize + iconPadding)*scale

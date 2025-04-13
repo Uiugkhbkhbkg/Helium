@@ -63,7 +63,7 @@ dependencies {
   compileOnly("com.github.Anuken.Arc:arc-core:$arcVersion")
   compileOnly("com.github.Anuken.Mindustry:core:$mindustryVersion")
 
-  implementation("com.github.EB-wilson.UniverseCore:markdown:2.1.1")
+  //implementation("com.github.EB-wilson.UniverseCore:markdown:2.1.1")
 
   implementation(kotlin("stdlib-jdk8"))
   implementation(kotlin("reflect"))

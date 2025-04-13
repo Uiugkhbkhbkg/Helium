@@ -102,9 +102,9 @@ object HeStyles {
       shieldPadRight = 5,
       font = Fonts.outline,
       texOffX = 15,
-      texOffY = 17,
+      texOffY = 5,
       shieldsOffX = 15,
-      shieldsOffY = 17
+      shieldsOffY = 5
     )
   }
 }

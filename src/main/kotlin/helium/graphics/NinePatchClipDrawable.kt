@@ -1,7 +1,6 @@
 package helium.graphics
 
 import arc.graphics.Color
-import arc.graphics.VertexAttribute.color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.NinePatch
 import arc.math.Mathf

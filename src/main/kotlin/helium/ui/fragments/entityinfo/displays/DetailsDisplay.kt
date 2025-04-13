@@ -64,10 +64,12 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
   override fun DetailsModel.realHeight(prefSize: Float) = element.prefHeight
 
   override fun DetailsModel.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
+    val drawW = drawWidth/scale
+    val drawH = drawHeight/scale
     val r = Interp.pow4Out.apply(fadeOut)
     element.scaleX = scale*r
     element.scaleY = scale
-    element.setBounds(origX + drawWidth/2*(1 - r), origY, drawWidth, drawHeight)
+    element.setBounds(origX + drawW/2*(1 - r), origY, drawW, drawH)
   }
 
   override fun DetailsModel.update(delta: Float) {

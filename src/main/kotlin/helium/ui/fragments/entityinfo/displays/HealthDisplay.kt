@@ -86,14 +86,14 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   }
 
   override fun HealthModel.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
-    val drawW = drawWidth*scale
-    val drawH = drawHeight*scale
+    val drawW = drawWidth/scale
+    val drawH = drawHeight/scale
 
     val progressHealth = Mathf.clamp(entity.health()/entity.maxHealth())
     val insProgHealth = Mathf.clamp(insectHealth/entity.maxHealth())
 
-    val healthBarWidth = (prefWidth - style.healthPadLeft - style.healthPadRight)
-    val shieldBarWidth = (prefWidth - style.shieldPadLeft - style.shieldPadRight)
+    val healthBarWidth = (drawW - style.healthPadLeft - style.healthPadRight)
+    val shieldBarWidth = (drawW - style.shieldPadLeft - style.shieldPadRight)
 
     val teamC = entity.let{ if(it is Teamc) it.team().color else Color.white }
 
@@ -168,8 +168,10 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
         else Color.lightGray
       shieldWidth = style.font.draw(
         shieldBuff,
-        origX + drawW*scale - style.shieldsOffX.toFloat()*Scl.scl(scale), origY + style.shieldsOffY.toFloat()*Scl.scl(scale),
-        c1.set(fontColor).a(alpha), scale*style.shieldFontScl,
+        origX + drawWidth - style.shieldsOffX*Scl.scl(scale),
+        origY + style.shieldsOffY*Scl.scl(scale) + style.font.capHeight*scale,
+        c1.set(fontColor).a(alpha),
+        scale*style.shieldFontScl,
         false,
         Align.topRight
       ).width/scale
@@ -177,8 +179,10 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     detailWidth = style.font.draw(
       detailBuff,
-      origX + style.texOffX.toFloat()*Scl.scl(scale), origY + style.texOffY.toFloat()*Scl.scl(scale),
-      c1.set(Color.white).a(alpha), scale*style.fontScl,
+      origX + style.texOffX*Scl.scl(scale),
+      origY + style.texOffY*Scl.scl(scale) + style.font.capHeight*scale,
+      c1.set(Color.white).a(alpha),
+      scale*style.fontScl,
       false,
       Align.topLeft
     ).width/scale

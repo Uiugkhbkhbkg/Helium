@@ -53,6 +53,11 @@ class AttackRangeExtractor {
       it.apply()
       it.setUniformf("u_time", Time.time)
       it.setUniformf("u_resolution", Core.camera.width, Core.camera.height)
+      it.setUniformf(
+        "u_campos",
+        Core.camera.position.x - Core.camera.width/2,
+        Core.camera.position.y - Core.camera.height/2
+      )
       it.setUniformf("u_stroke", stroke)
       it.setUniformf("u_alpha", alpha)
       it.setUniformi("u_texture", 0)

@@ -2,7 +2,6 @@ package helium
 
 import arc.Core
 import arc.files.Fi
-import arc.graphics.g2d.Draw
 import arc.scene.ui.layout.Table
 import helium.graphics.HeShaders
 import helium.graphics.g2d.AttackRangeExtractor
@@ -18,7 +17,6 @@ import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
 import mindustry.gen.Icon
-import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.mod.Mods.LoadedMod
 import mindustry.ui.Styles
@@ -95,13 +93,8 @@ object He {
   }
 
   fun drawWorld() {
+    AttackRangeDisplay.resetTeamMark()
     entityInfo.drawWorld()
-
-    Draw.drawRange(Layer.light - 2, 0.5f, {
-      attackRenderer.capture()
-    }) {
-      attackRenderer.render()
-    }
   }
 
   private fun setupDisplays(infos: EntityInfoFrag) {

@@ -179,7 +179,7 @@ class EntityInfoFrag {
         val model = entry.value
 
         display.apply {
-          if ((hoveringOnly && !model.checkHovering(hovering.contains(e))) || !model.shouldDisplay()) return@r
+          if ((hoveringOnly && !model.checkHovering(checkIsHovering(e))) || !model.shouldDisplay()) return@r
           if (model.checkWorldClip(worldViewport) && model.shouldDisplay()) {
             model.drawWorld(infoAlpha*e.alpha)
           }
@@ -319,7 +319,7 @@ class EntityInfoFrag {
   @Suppress("UNCHECKED_CAST")
   private fun update(delta: Float) {
     displayQueue.reversed().forEach { e -> e.display.forEach r@{ it.key.apply {
-      if (!it.value.checkHovering(hovering.contains(e)) && hoveringOnly) return@r
+      if (!it.value.checkHovering(checkIsHovering(e)) && hoveringOnly) return@r
       if (it.value == null){
         val model = obtainModel(e.entity)
         if (this is InputEventChecker<*>){
@@ -360,7 +360,7 @@ class EntityInfoFrag {
 
         display.apply {
           if (
-            (hoveringOnly && !model.checkHovering(hovering.contains(e)))
+            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
             || !model.shouldDisplay()
           ) return@f
           when (display.layoutSide) {
@@ -390,59 +390,67 @@ class EntityInfoFrag {
 
         display.apply {
           if (
-            (hoveringOnly && !model.checkHovering(hovering.contains(e)))
+            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
             || !model.shouldDisplay()
           ) return@f
-          val elem = if (display is InputEventChecker<*> && model is InputCheckerModel) model.element else null
           when (layoutSide) {
             CENTER -> {
               val disW = centerWith*scale
               val disH = centerHeight*scale
-              elem?.setBounds(ox, oy, disW, disH)
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH/2, disW, disH))
                 model.draw(alpha, scale, ox - disW/2, oy - disH/2, disW, disH)
             }
             RIGHT -> {
-              val disW = model.realWidth(rightHeight)
-              val disH = model.realHeight(rightHeight)
-              elem?.setBounds(ox + offsetRight, oy - disH/2, disW, disH)
+              val w = model.realWidth(rightHeight)
+              val h = model.realHeight(rightHeight)
+              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val disW = w*scl
+              val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
-                model.draw(alpha, scale, ox + offsetRight, oy - disH/2, disW, disH)
+                model.draw(alpha, scl, ox + offsetRight, oy - disH/2, disW, disH)
 
-              offsetRight += disW*scale
+              offsetRight += disW
             }
             TOP -> {
-              val disW = model.realWidth(topWidth)
-              val disH = model.realHeight(topWidth)
-              elem?.setBounds(ox - disW/2, oy + offsetTop, disW, disH)
+              val w = model.realWidth(topWidth)
+              val h = model.realHeight(topWidth)
+              val scl = min(max(8*sizeOff/w, 4*sizeOff/w*scale), scale)
+              val disW = w*scl
+              val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop, disW, disH))
-                model.draw(alpha, scale, ox - disW/2, oy + offsetTop, disW, disH)
+                model.draw(alpha, scl, ox - disW/2, oy + offsetTop, disW, disH)
 
-              offsetTop += disH*scale
+              offsetTop += disH
             }
             LEFT -> {
-              val disW = model.realWidth(leftHeight)
-              val disH = model.realHeight(leftHeight)
-              elem?.setBounds(ox - disW - offsetLeft, oy - disH/2, disW, disH)
+              val w = model.realWidth(leftHeight)
+              val h = model.realHeight(leftHeight)
+              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val disW = w*scl
+              val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
-                model.draw(alpha, scale, ox - disW - offsetLeft, oy - disH/2, disW, disH)
+                model.draw(alpha, scl, ox - disW - offsetLeft, oy - disH/2, disW, disH)
 
-              offsetLeft += disW*scale
+              offsetLeft += disW
             }
             BOTTOM -> {
-              val disW = model.realWidth(bottomWidth)
-              val disH = model.realHeight(bottomWidth)
-              elem?.setBounds(ox - disW/2, oy - disH - offsetBottom, disW, disH)
+              val w = model.realWidth(bottomWidth)
+              val h = model.realHeight(bottomWidth)
+              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val disW = w*scl
+              val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))
-                model.draw(alpha, scale, ox - disW/2, oy - disH - offsetBottom, disW, disH)
+                model.draw(alpha, scl, ox - disW/2, oy - disH - offsetBottom, disW, disH)
 
-              offsetBottom += disH*scale
+              offsetBottom += disH
             }
           }
         }
       }
     }
   }
+
+  private fun checkIsHovering(e: EntityEntry) = hovering.contains(e) || (Core.input.alt() && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {
