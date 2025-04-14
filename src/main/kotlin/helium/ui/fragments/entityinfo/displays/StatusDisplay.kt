@@ -1,5 +1,6 @@
 package helium.ui.fragments.entityinfo.displays
 
+import arc.Core
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.math.Mathf
@@ -48,7 +49,7 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
   override fun valid(entity: Posc) = entity is Statusc
 
   override fun StatusModel.shouldDisplay(): Boolean {
-    return Vars.content.statusEffects().any{ entity.hasEffect(it) }
+    return statusList.any()
   }
 
   override fun StatusModel.realHeight(prefSize: Float): Float{
@@ -131,6 +132,7 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
     val list = statusList
     list.clear()
     Vars.content.statusEffects().forEach { eff ->
+      if (!Core.atlas.isFound(eff.uiIcon)) return@forEach
       if (entity.hasEffect(eff)) {
         list.add(eff)
       }

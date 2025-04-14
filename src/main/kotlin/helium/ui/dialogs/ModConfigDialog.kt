@@ -1,24 +1,23 @@
 package helium.ui.dialogs
 
 import arc.Core
-import arc.func.*
+import arc.func.Cons
 import arc.graphics.Color
 import arc.math.Mathf
 import arc.scene.actions.Actions
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
-import arc.scene.ui.*
+import arc.scene.ui.TextButton
 import arc.scene.ui.TextButton.TextButtonStyle
-import arc.scene.ui.layout.Cell
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
 import arc.struct.ObjectMap
 import arc.struct.OrderedMap
 import arc.struct.Seq
 import arc.util.Align
-import arc.util.Strings
 import helium.He
 import helium.Helium
+import helium.ui.HeAssets
 import helium.ui.HeStyles
 import mindustry.Vars
 import mindustry.gen.Icon
@@ -176,7 +175,7 @@ class ModConfigDialog : BaseDialog("") {
     }.grow().pad(4f).padLeft(12f).padRight(12f)
     cont.row()
     relaunchTip = cont.table(
-      HeStyles.grayUIAlpha
+      HeAssets.grayUIAlpha
     ) { t: Table ->
       t.add(Core.bundle["infos.requireRelaunch"]).color(Color.red)
     }.fill().center().margin(10f).pad(4f).get()

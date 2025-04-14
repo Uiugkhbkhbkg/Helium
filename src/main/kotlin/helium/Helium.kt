@@ -1,12 +1,10 @@
 package helium
 
 import arc.Core
-import arc.Events
 import arc.files.Fi
 import arc.graphics.g2d.TextureRegion
 import arc.scene.style.Drawable
 import helium.graphics.ScreenSampler
-import mindustry.game.EventType
 import mindustry.mod.Mod
 
 class Helium : Mod() {
@@ -18,8 +16,6 @@ class Helium : Mod() {
     ScreenSampler.setup()
 
     He.init()
-    Events.run(EventType.Trigger.update) { He.update() }
-    Events.run(EventType.Trigger.draw) { He.drawWorld() }
   }
 
   companion object {

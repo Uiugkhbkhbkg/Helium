@@ -4,7 +4,7 @@ import arc.math.Interp
 import arc.math.Mathf
 import arc.scene.Element
 import arc.scene.ui.layout.Table
-import helium.ui.HeStyles
+import helium.ui.HeAssets
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.InputCheckerModel
 import helium.ui.fragments.entityinfo.InputEventChecker
@@ -36,7 +36,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     get() = element.prefHeight
 
   override fun DetailsModel.buildListener(): Element {
-    val tab = Table(HeStyles.padGrayUIAlpha).also {
+    val tab = Table(HeAssets.padGrayUIAlpha).also {
       it.isTransform = true
       it.originX = 0f
       it.originY = 0f
@@ -69,7 +69,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     val r = Interp.pow4Out.apply(fadeOut)
     element.scaleX = scale*r
     element.scaleY = scale
-    element.setBounds(origX + drawW/2*(1 - r), origY, drawW, drawH)
+    element.setBounds(origX + drawWidth/2*(1 - r), origY, drawW, drawH)
   }
 
   override fun DetailsModel.update(delta: Float) {

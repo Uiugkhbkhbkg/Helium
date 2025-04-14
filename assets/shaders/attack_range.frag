@@ -49,7 +49,9 @@ void main() {
         gl_FragColor = vec4(s <= threshold? vec3(1.0): base.rgb, a);
     }
     else if (base.a >= threshold) {
-        gl_FragColor = vec4(s <= threshold? vec3(0.0): base.rgb, base.a*u_alpha);
+        vec4 c1 = vec4(base.rgb, base.a*u_alpha);
+        vec4 c2 = vec4(vec3(1.0), u_alpha);
+        gl_FragColor = s <= threshold? mix(c1, c2, a): c1;
     }
     else {
         gl_FragColor = vec4(0.0);

@@ -177,67 +177,77 @@ open class NinePatchClipDrawable: BaseClipDrawable {
     val topRowY = y + height - topHeight
     val c: Float = tmpColor.set(patch.color).mul(Draw.getColor()).toFloatBits()
 
-    if (bottomLeft != -1) set(
-      vertices, bottomLeft,
+    val bl = bottomLeft
+    val bc = bottomCenter
+    val br = bottomRight
+    val ml = middleLeft
+    val mc = middleCenter
+    val mr = middleRight
+    val tl = topLeft
+    val tc = topCenter
+    val tr = topRight
+
+    if (bl != -1) set(
+      vertices, bl,
       x, y, centerColumnX - x, middleRowY - y,
-      originVert[bottomLeft + 3], originVert[bottomLeft + 4],
-      originVert[bottomLeft + 15], originVert[bottomLeft + 16],
+      originVert[bl + 3], originVert[bl + 4],
+      originVert[bl + 15], originVert[bl + 16],
       c
     )
-    if (bottomCenter != -1) set(
-      vertices, bottomCenter,
+    if (bc != -1) set(
+      vertices, bc,
       centerColumnX, y, rightColumnX - centerColumnX, middleRowY - y,
-      originVert[bottomCenter + 3], originVert[bottomCenter + 4],
-      originVert[bottomCenter + 15], originVert[bottomCenter + 16],
+      originVert[bc + 3], originVert[bc + 4],
+      originVert[bc + 15], originVert[bc + 16],
       c
     )
-    if (bottomRight != -1) set(
-      vertices, bottomRight,
+    if (br != -1) set(
+      vertices, br,
       rightColumnX, y, x + width - rightColumnX, middleRowY - y,
-      originVert[bottomRight + 3], originVert[bottomRight + 4],
-      originVert[bottomRight + 15], originVert[bottomRight + 16],
+      originVert[br + 3], originVert[br + 4],
+      originVert[br + 15], originVert[br + 16],
       c
     )
-    if (middleLeft != -1) set(
-      vertices, middleLeft,
+    if (ml != -1) set(
+      vertices, ml,
       x, middleRowY, centerColumnX - x, topRowY - middleRowY,
-      originVert[middleLeft + 3], originVert[middleLeft + 4],
-      originVert[middleLeft + 15], originVert[middleLeft + 16],
+      originVert[ml + 3], originVert[ml + 4],
+      originVert[ml + 15], originVert[ml + 16],
       c
     )
-    if (middleCenter != -1) set(
-      vertices, middleCenter,
+    if (mc != -1) set(
+      vertices, mc,
       centerColumnX, middleRowY, rightColumnX - centerColumnX, topRowY - middleRowY,
-      originVert[middleCenter + 3], originVert[middleCenter + 4],
-      originVert[middleCenter + 15], originVert[middleCenter + 16],
+      originVert[mc + 3], originVert[mc + 4],
+      originVert[mc + 15], originVert[mc + 16],
       c
     )
-    if (middleRight != -1) set(
-      vertices, middleRight,
+    if (mr != -1) set(
+      vertices, mr,
       rightColumnX, middleRowY, x + width - rightColumnX, topRowY - middleRowY,
-      originVert[middleRight + 3], originVert[middleRight + 4],
-      originVert[middleRight + 15], originVert[middleRight + 16],
+      originVert[mr + 3], originVert[mr + 4],
+      originVert[mr + 15], originVert[mr + 16],
       c
     )
-    if (topLeft != -1) set(
-      vertices, topLeft,
+    if (tl != -1) set(
+      vertices, tl,
       x, topRowY, centerColumnX - x, y + height - topRowY,
-      originVert[topLeft + 3], originVert[topLeft + 4],
-      originVert[topLeft + 15], originVert[topLeft + 16],
+      originVert[tl + 3], originVert[tl + 4],
+      originVert[tl + 15], originVert[tl + 16],
       c
     )
-    if (topCenter != -1) set(
-      vertices, topCenter,
+    if (tc != -1) set(
+      vertices, tc,
       centerColumnX, topRowY, rightColumnX - centerColumnX, y + height - topRowY,
-      originVert[topCenter + 3], originVert[topCenter + 4],
-      originVert[topCenter + 15], originVert[topCenter + 16],
+      originVert[tc + 3], originVert[tc + 4],
+      originVert[tc + 15], originVert[tc + 16],
       c
     )
-    if (topRight != -1) set(
-      vertices, topRight,
+    if (tr != -1) set(
+      vertices, tr,
       rightColumnX, topRowY, x + width - rightColumnX, y + height - topRowY,
-      originVert[topRight + 3], originVert[topRight + 4],
-      originVert[topRight + 15], originVert[topRight + 16],
+      originVert[tr + 3], originVert[tr + 4],
+      originVert[tr + 15], originVert[tr + 16],
       c
     )
   }
@@ -251,6 +261,16 @@ open class NinePatchClipDrawable: BaseClipDrawable {
     vertices.fill(0f)
 
     if (cLeft > width - cRight || cTop > height - cBottom) return
+
+    val bl = bottomLeft
+    val bc = bottomCenter
+    val br = bottomRight
+    val ml = middleLeft
+    val mc = middleCenter
+    val mr = middleRight
+    val tl = topLeft
+    val tc = topCenter
+    val tr = topRight
 
     val centerColumnX = x + this.leftWidth
     val rightColumnX = x + width - this.rightWidth
@@ -274,11 +294,11 @@ open class NinePatchClipDrawable: BaseClipDrawable {
 
     val c = tmpColor.set(patch.color).mul(Draw.getColor()).toFloatBits()
 
-    if (bottomLeft != -1 && fromX < centerColumnX && fromY < middleRowY) {
-      val u1 = originVert[bottomLeft + 3]
-      val v1 = originVert[bottomLeft + 4]
-      val u2 = originVert[bottomLeft + 15]
-      val v2 = originVert[bottomLeft + 16]
+    if (bl != -1 && fromX < centerColumnX && fromY < middleRowY) {
+      val u1 = originVert[bl + 3]
+      val v1 = originVert[bl + 4]
+      val u2 = originVert[bl + 15]
+      val v2 = originVert[bl + 16]
 
       val rateXL = cLeft/leftWidth
       val rateYB = cBottom/bottomHeight
@@ -286,18 +306,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp(clipYoY/bottomHeight)
 
       set(
-        vertices, bottomLeft,
+        vertices, bl,
         fromX, fromY,
         leftWidth*(rateXR - rateXL), bottomHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (bottomCenter != -1 && fromX < rightColumnX && toX > centerColumnX && fromY < middleRowY) {
-      val u1 = originVert[bottomCenter + 3]
-      val v1 = originVert[bottomCenter + 4]
-      val u2 = originVert[bottomCenter + 15]
-      val v2 = originVert[bottomCenter + 16]
+    if (bc != -1 && fromX < rightColumnX && toX > centerColumnX && fromY < middleRowY) {
+      val u1 = originVert[bc + 3]
+      val v1 = originVert[bc + 4]
+      val u2 = originVert[bc + 15]
+      val v2 = originVert[bc + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth)/centerWidth)
       val rateYB = cBottom/bottomHeight
@@ -305,18 +325,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp(clipYoY/bottomHeight)
 
       set(
-        vertices, bottomCenter,
+        vertices, bc,
         centerColumnX + centerWidth*rateXL, fromY,
         centerWidth*(rateXR - rateXL), bottomHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (bottomRight != -1 && toX > rightColumnX && fromY < middleRowY) {
-      val u1 = originVert[bottomRight + 3]
-      val v1 = originVert[bottomRight + 4]
-      val u2 = originVert[bottomRight + 15]
-      val v2 = originVert[bottomRight + 16]
+    if (br != -1 && toX > rightColumnX && fromY < middleRowY) {
+      val u1 = originVert[br + 3]
+      val v1 = originVert[br + 4]
+      val u2 = originVert[br + 15]
+      val v2 = originVert[br + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth - centerWidth)/rightWidth)
       val rateYB = cBottom/bottomHeight
@@ -324,7 +344,7 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp(clipYoY/bottomHeight)
 
       set(
-        vertices, bottomRight,
+        vertices, br,
         rightColumnX + rightWidth*rateXL, fromY,
         rightWidth*(rateXR - rateXL), bottomHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
@@ -332,11 +352,11 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       )
     }
 
-    if (middleLeft != -1 && fromX < centerColumnX && fromY < topRowY && toY > middleRowY) {
-      val u1 = originVert[middleLeft + 3]
-      val v1 = originVert[middleLeft + 4]
-      val u2 = originVert[middleLeft + 15]
-      val v2 = originVert[middleLeft + 16]
+    if (ml != -1 && fromX < centerColumnX && fromY < topRowY && toY > middleRowY) {
+      val u1 = originVert[ml + 3]
+      val v1 = originVert[ml + 4]
+      val u2 = originVert[ml + 15]
+      val v2 = originVert[ml + 16]
 
       val rateXL = cLeft/leftWidth
       val rateYB = Mathf.clamp((cBottom - bottomHeight)/centerHeight)
@@ -344,18 +364,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight)/centerHeight)
 
       set(
-        vertices, middleLeft,
+        vertices, ml,
         fromX, middleRowY + centerHeight*rateYB,
         leftWidth*(rateXR - rateXL), centerHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (middleCenter != -1 && fromX < rightColumnX && toX > centerColumnX && fromY < topRowY && toY > middleRowY) {
-      val u1 = originVert[middleCenter + 3]
-      val v1 = originVert[middleCenter + 4]
-      val u2 = originVert[middleCenter + 15]
-      val v2 = originVert[middleCenter + 16]
+    if (mc != -1 && fromX < rightColumnX && toX > centerColumnX && fromY < topRowY && toY > middleRowY) {
+      val u1 = originVert[mc + 3]
+      val v1 = originVert[mc + 4]
+      val u2 = originVert[mc + 15]
+      val v2 = originVert[mc + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth)/centerWidth)
       val rateYB = Mathf.clamp((cBottom - bottomHeight)/centerHeight)
@@ -363,18 +383,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight)/centerHeight)
 
       set(
-        vertices, middleCenter,
+        vertices, mc,
         centerColumnX + centerWidth*rateXL, middleRowY + centerHeight*rateYB,
         centerWidth*(rateXR - rateXL), centerHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (middleRight != -1 && toX > rightColumnX && fromY < topRowY && toY > middleRowY) {
-      val u1 = originVert[middleRight + 3]
-      val v1 = originVert[middleRight + 4]
-      val u2 = originVert[middleRight + 15]
-      val v2 = originVert[middleRight + 16]
+    if (mr != -1 && toX > rightColumnX && fromY < topRowY && toY > middleRowY) {
+      val u1 = originVert[mr + 3]
+      val v1 = originVert[mr + 4]
+      val u2 = originVert[mr + 15]
+      val v2 = originVert[mr + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth - centerWidth)/rightWidth)
       val rateYB = Mathf.clamp((cBottom - bottomHeight)/centerHeight)
@@ -382,7 +402,7 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight)/centerHeight)
 
       set(
-        vertices, middleRight,
+        vertices, mr,
         rightColumnX + rightWidth*rateXL, middleRowY + centerHeight*rateYB,
         rightWidth*(rateXR - rateXL), centerHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
@@ -390,11 +410,11 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       )
     }
 
-    if (topLeft != -1 && fromX < centerColumnX && toY > topRowY) {
-      val u1 = originVert[topLeft + 3]
-      val v1 = originVert[topLeft + 4]
-      val u2 = originVert[topLeft + 15]
-      val v2 = originVert[topLeft + 16]
+    if (tl != -1 && fromX < centerColumnX && toY > topRowY) {
+      val u1 = originVert[tl + 3]
+      val v1 = originVert[tl + 4]
+      val u2 = originVert[tl + 15]
+      val v2 = originVert[tl + 16]
 
       val rateXL = cLeft/leftWidth
       val rateYB = Mathf.clamp((cBottom - bottomHeight - centerHeight)/topHeight)
@@ -402,18 +422,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight - centerHeight)/topHeight)
 
       set(
-        vertices, topLeft,
+        vertices, tl,
         fromX, middleRowY + centerHeight + topHeight*rateYB,
         leftWidth*(rateXR - rateXL), topHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (topCenter != -1 && fromX < rightColumnX && toX > centerColumnX && toY > topRowY) {
-      val u1 = originVert[topCenter + 3]
-      val v1 = originVert[topCenter + 4]
-      val u2 = originVert[topCenter + 15]
-      val v2 = originVert[topCenter + 16]
+    if (tc != -1 && fromX < rightColumnX && toX > centerColumnX && toY > topRowY) {
+      val u1 = originVert[tc + 3]
+      val v1 = originVert[tc + 4]
+      val u2 = originVert[tc + 15]
+      val v2 = originVert[tc + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth)/centerWidth)
       val rateYB = Mathf.clamp((cBottom - bottomHeight - centerHeight)/topHeight)
@@ -421,18 +441,18 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight - centerHeight)/topHeight)
 
       set(
-        vertices, topCenter,
+        vertices, tc,
         centerColumnX + centerWidth*rateXL, middleRowY + centerHeight + topHeight*rateYB,
         centerWidth*(rateXR - rateXL), topHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
         c
       )
     }
-    if (topRight != -1 && toX > rightColumnX && toY > topRowY) {
-      val u1 = originVert[topRight + 3]
-      val v1 = originVert[topRight + 4]
-      val u2 = originVert[topRight + 15]
-      val v2 = originVert[topRight + 16]
+    if (tr != -1 && toX > rightColumnX && toY > topRowY) {
+      val u1 = originVert[tr + 3]
+      val v1 = originVert[tr + 4]
+      val u2 = originVert[tr + 15]
+      val v2 = originVert[tr + 16]
 
       val rateXL = Mathf.clamp((cLeft - leftWidth - centerWidth)/rightWidth)
       val rateYB = Mathf.clamp((cBottom - bottomHeight - centerHeight)/topHeight)
@@ -440,7 +460,7 @@ open class NinePatchClipDrawable: BaseClipDrawable {
       val rateYT = Mathf.clamp((clipYoY - bottomHeight - centerHeight)/topHeight)
 
       set(
-        vertices, topRight,
+        vertices, tr,
         rightColumnX + rightWidth*rateXL, middleRowY + centerHeight + topHeight*rateYB,
         rightWidth*(rateXR - rateXL), topHeight*(rateYT - rateYB),
         u1 + (u2 - u1)*rateXL, v1 + (v2 - v1)*rateYB, u1 + (u2 - u1)*rateXR, v1 + (v2 - v1)*rateYT,
@@ -458,7 +478,7 @@ open class NinePatchClipDrawable: BaseClipDrawable {
     val fx2 = x + width
     val fy2 = y + height
     val mixColor = Color.clearFloatBits
-    vertices[idx] = x
+    vertices[idx + 0] = x
     vertices[idx + 1] = y
     vertices[idx + 2] = color
     vertices[idx + 3] = u1

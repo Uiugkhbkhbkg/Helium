@@ -4,12 +4,69 @@ import arc.Core
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Lines
+import arc.graphics.g2d.TextureRegion
 import arc.graphics.gl.FrameBuffer
 import arc.graphics.gl.Shader
 import arc.math.Mathf
 import arc.math.geom.Vec2
 
 object DrawUtils {
+  private val circleOffset24 = prepareCircleOffset(24)
+  private val circleOffset36 = prepareCircleOffset(36)
+  private val circleOffset60 = prepareCircleOffset(60)
+
+  private val circleVertices24 = prepareCircleVertices(24)
+  private val circleVertices36 = prepareCircleVertices(36)
+  private val circleVertices60 = prepareCircleVertices(60)
+
+  private fun getVerts(level: Int) = when(level) {
+    1 -> circleOffset24 to circleVertices24
+    2 -> circleOffset36 to circleVertices36
+    3 -> circleOffset60 to circleVertices60
+    else -> error("Level $level not supported")
+  }
+
+  private fun prepareCircleOffset(sides: Int): FloatArray {
+    val vertices = FloatArray(sides * 4)
+    val step = 360f/sides
+
+    for (i in 0 until sides) {
+      val angle = i*step
+      val angle1 = (i + 1)*step
+      vertices[i * 4] = Mathf.cosDeg(angle)
+      vertices[i * 4 + 1] = Mathf.sinDeg(angle)
+      vertices[i * 4 + 2] = Mathf.cosDeg(angle1)
+      vertices[i * 4 + 3] = Mathf.sinDeg(angle1)
+    }
+    return vertices
+  }
+
+  private fun prepareCircleVertices(sides: Int): FloatArray{
+    val vertices = FloatArray(sides * 24)
+    val region: TextureRegion = Core.atlas.white()
+    val mcolor = Color.clearFloatBits
+    val u = region.u
+    val v = region.v
+
+    for (i in 0 until sides) {
+      val off = i * 24
+      vertices[off + 3] = u
+      vertices[off + 4] = v
+      vertices[off + 5] = mcolor
+      vertices[off + 9] = u
+      vertices[off + 10] = v
+      vertices[off + 11] = mcolor
+      vertices[off + 15] = u
+      vertices[off + 16] = v
+      vertices[off + 17] = mcolor
+      vertices[off + 21] = u
+      vertices[off + 22] = v
+      vertices[off + 23] = mcolor
+    }
+
+    return vertices
+  }
+
   private var drawTasks: Array<DrawTask?> = arrayOfNulls(16)
   private var taskBuffer: Array<FrameBuffer?> = arrayOfNulls(16)
 
@@ -17,11 +74,129 @@ object DrawUtils {
   private val v2 = Vec2()
   private val v3 = Vec2()
 
+  fun fillCircle(x: Float, y: Float, radius: Float, level: Int = 2){
+    val color = Draw.getColorPacked()
+    val (offset, vertices) = getVerts(level)
+    val sides = offset.size/4
+
+    for (i in 0 until sides) {
+      val idx = i*24
+      val offX1 = offset[i * 4]
+      val offY1 = offset[i * 4 + 1]
+      val offX2 = offset[i * 4 + 2]
+      val offY2 = offset[i * 4 + 3]
+      val dxi1 = x + offX1 * radius
+      val dyi1 = y + offY1 * radius
+      val dxi2 = x + offX2 * radius
+      val dyi2 = y + offY2 * radius
+
+      vertices[idx + 0] = dxi1
+      vertices[idx + 1] = dyi1
+      vertices[idx + 2] = color
+
+      vertices[idx + 6] = x
+      vertices[idx + 7] = y
+      vertices[idx + 8] = color
+
+      vertices[idx + 12] = x
+      vertices[idx + 13] = y
+      vertices[idx + 14] = color
+
+      vertices[idx + 18] = dxi2
+      vertices[idx + 19] = dyi2
+      vertices[idx + 20] = color
+    }
+
+    Draw.vert(Core.atlas.white().texture, vertices, 0, vertices.size);
+  }
+
+  fun innerLightCircle(x: Float, y: Float, innerRadius: Float, radius: Float, innerColor: Color, color: Color, level: Int = 2){
+    val c1 = innerColor.toFloatBits()
+    val c2 = color.toFloatBits()
+    val (offset, vertices) = getVerts(level)
+    val sides = offset.size/4
+
+    for (i in 0 until sides) {
+      val idx = i*24
+      val offX1 = offset[i * 4]
+      val offY1 = offset[i * 4 + 1]
+      val offX2 = offset[i * 4 + 2]
+      val offY2 = offset[i * 4 + 3]
+      val dxi1 = x + offX1 * innerRadius
+      val dyi1 = y + offY1 * innerRadius
+      val dxo1 = x + offX1 * radius
+      val dyo1 = y + offY1 * radius
+      val dxi2 = x + offX2 * innerRadius
+      val dyi2 = y + offY2 * innerRadius
+      val dxo2 = x + offX2 * radius
+      val dyo2 = y + offY2 * radius
+
+      vertices[idx + 0] = dxi1
+      vertices[idx + 1] = dyi1
+      vertices[idx + 2] = c1
+
+      vertices[idx + 6] = dxo1
+      vertices[idx + 7] = dyo1
+      vertices[idx + 8] = c2
+
+      vertices[idx + 12] = dxo2
+      vertices[idx + 13] = dyo2
+      vertices[idx + 14] = c2
+
+      vertices[idx + 18] = dxi2
+      vertices[idx + 19] = dyi2
+      vertices[idx + 20] = c1
+    }
+
+    Draw.vert(Core.atlas.white().texture, vertices, 0, vertices.size);
+  }
+
+  fun lineCircle(x: Float, y: Float, radius: Float, level: Int = 2){
+    val stroke = Lines.getStroke()
+    val color = Draw.getColorPacked()
+    val (offset, vertices) = getVerts(level)
+    val sides = offset.size/4
+
+    for (i in 0 until sides) {
+      val idx = i*24
+      val offX1 = offset[i * 4]
+      val offY1 = offset[i * 4 + 1]
+      val offX2 = offset[i * 4 + 2]
+      val offY2 = offset[i * 4 + 3]
+      val dxi1 = x + offX1 * (radius + stroke)
+      val dyi1 = y + offY1 * (radius + stroke)
+      val dxo1 = x + offX1 * (radius - stroke)
+      val dyo1 = y + offY1 * (radius - stroke)
+      val dxi2 = x + offX2 * (radius + stroke)
+      val dyi2 = y + offY2 * (radius + stroke)
+      val dxo2 = x + offX2 * (radius - stroke)
+      val dyo2 = y + offY2 * (radius - stroke)
+
+      vertices[idx + 0] = dxi1
+      vertices[idx + 1] = dyi1
+      vertices[idx + 2] = color
+
+      vertices[idx + 6] = dxo1
+      vertices[idx + 7] = dyo1
+      vertices[idx + 8] = color
+
+      vertices[idx + 12] = dxo2
+      vertices[idx + 13] = dyo2
+      vertices[idx + 14] = color
+
+      vertices[idx + 18] = dxi2
+      vertices[idx + 19] = dyi2
+      vertices[idx + 20] = color
+    }
+
+    Draw.vert(Core.atlas.white().texture, vertices, 0, vertices.size);
+  }
+
   fun dashCircle(
     x: Float, y: Float, radius: Float,
     dashes: Int = 8,
     totalDashDeg: Float = 180f,
-    rotate: Float = 0f
+    rotate: Float = 0f,
   ) {
     if (Mathf.equal(totalDashDeg, 0f)) return
 

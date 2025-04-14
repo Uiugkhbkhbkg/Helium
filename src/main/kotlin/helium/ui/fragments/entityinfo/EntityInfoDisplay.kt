@@ -23,6 +23,8 @@ abstract class EntityInfoDisplay<M: Model<*>>(
 
   abstract val layoutSide: Side
   open val hoveringOnly: Boolean get() = false
+  open val screenRender: Boolean get() = true
+  open val worldRender: Boolean get() = false
 
   abstract fun valid(entity: Posc): Boolean
 

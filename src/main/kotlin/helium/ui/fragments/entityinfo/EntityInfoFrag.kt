@@ -38,6 +38,7 @@ class EntityInfoFrag {
   private val displays = Seq<EntityInfoDisplay<Model<*>>>()
 
   private val displayQueue = OrderedSet<EntityEntry>()
+  private val all = OrderedSet<EntityEntry>()
 
   private var delta = 0f
   private var infoAlpha = 1f
@@ -113,6 +114,12 @@ class EntityInfoFrag {
     infoFill.fillParent = true
   }
 
+  fun reset(){
+    all.forEach { Pools.free(it) }
+    all.clear()
+    displayQueue.clear()
+  }
+
   fun drawWorld(){
     Core.camera.bounds(worldViewport)
 
@@ -178,6 +185,8 @@ class EntityInfoFrag {
         val display = entry.key
         val model = entry.value
 
+        if (!display.worldRender) return@r
+
         display.apply {
           if ((hoveringOnly && !model.checkHovering(checkIsHovering(e))) || !model.shouldDisplay()) return@r
           if (model.checkWorldClip(worldViewport) && model.shouldDisplay()) {
@@ -217,7 +226,7 @@ class EntityInfoFrag {
       val e = tempEntry
       e.entity = entity
 
-      val ent = displayQueue.get(e)
+      val ent = all.get(e)
       if (ent == null) {
         val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
         entry.entity = entity
@@ -240,10 +249,10 @@ class EntityInfoFrag {
           }
         }
 
-        if (entry.display.isEmpty) Pools.free(entry)
-        else {
-          entry.showing = true
-
+        entry.isValid = !entry.display.isEmpty
+        entry.showing = true
+        all.add(entry)
+        if (entry.isValid) {
           displayQueue.add(entry)
 
           if (checkHovering(entity)) {
@@ -254,7 +263,7 @@ class EntityInfoFrag {
       else {
         ent.showing = true
 
-        if (checkHovering(entity)) {
+        if (ent.isValid && checkHovering(entity)) {
           currHov.add(ent)
         }
       }
@@ -276,16 +285,21 @@ class EntityInfoFrag {
       selectionRect.set(0f, 0f, 0f, 0f)
     }
 
-    val itr = displayQueue.iterator()
+    val itr = all.iterator()
     while (itr.hasNext()) {
       val entry = itr.next()
-      if (!entry.showing && !hovering.contains(entry)) entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
+
+      if (!entry.entity.isAdded) hovering.remove(entry)
+
+      if (!entry.showing && !hovering.contains(entry))
+        entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
       else entry.alpha = 1f
 
       entry.showing = false
 
       if (entry.alpha <= 0.001f) {
         itr.remove()
+        displayQueue.remove(entry)
         Pools.free(entry)
       }
     }
@@ -330,12 +344,16 @@ class EntityInfoFrag {
         e.display.put(it.key, model)
         it.value = model
       }
-      if (it.value.shouldDisplay()) it.value.update(delta)
+      it.value.update(delta)
     } } }
   }
 
   private fun drawHUDLay() {
     val scale = config.entityInfoScale
+    val maxSizeMul = 6
+    val minSizeMul = 2
+
+    Draw.sort(true)
     displayQueue.reversed().forEach { e ->
       var offsetLeft = 0f
       var offsetRight = 0f
@@ -356,6 +374,7 @@ class EntityInfoFrag {
       val alpha = infoAlpha*e.alpha
       e.display.forEach f@{ entry ->
         val display = entry.key
+        if (!display.screenRender) return@f
         val model = entry.value?: return@f
 
         display.apply {
@@ -403,7 +422,7 @@ class EntityInfoFrag {
             RIGHT -> {
               val w = model.realWidth(rightHeight)
               val h = model.realHeight(rightHeight)
-              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val scl = min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
@@ -414,7 +433,7 @@ class EntityInfoFrag {
             TOP -> {
               val w = model.realWidth(topWidth)
               val h = model.realHeight(topWidth)
-              val scl = min(max(8*sizeOff/w, 4*sizeOff/w*scale), scale)
+              val scl = min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop, disW, disH))
@@ -425,7 +444,7 @@ class EntityInfoFrag {
             LEFT -> {
               val w = model.realWidth(leftHeight)
               val h = model.realHeight(leftHeight)
-              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val scl = min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
@@ -436,7 +455,7 @@ class EntityInfoFrag {
             BOTTOM -> {
               val w = model.realWidth(bottomWidth)
               val h = model.realHeight(bottomWidth)
-              val scl = min(max(8*sizeOff/h, 4*sizeOff/h*scale), scale)
+              val scl = min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))
@@ -448,6 +467,8 @@ class EntityInfoFrag {
         }
       }
     }
+    Draw.flush()
+    Draw.sort(false)
   }
 
   private fun checkIsHovering(e: EntityEntry) = hovering.contains(e) || (Core.input.alt() && currHov.contains(e))
@@ -457,6 +478,7 @@ class EntityEntry : Poolable {
   lateinit var entity: Posc
   var alpha = 0f
   var showing = false
+  var isValid = false
 
   val display = OrderedMap<EntityInfoDisplay<Model<*>>, Model<*>>()
 

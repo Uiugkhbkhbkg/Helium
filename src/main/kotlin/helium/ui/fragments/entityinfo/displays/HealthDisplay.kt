@@ -3,12 +3,14 @@ package helium.ui.fragments.entityinfo.displays
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Font
+import arc.graphics.g2d.FontCache
+import arc.math.Mat
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
 import arc.util.Align
 import arc.util.Tmp.c1
 import helium.graphics.ClipDrawable
-import helium.ui.HeStyles
+import helium.ui.HeAssets
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
@@ -27,8 +29,16 @@ class HealthModel: Model<Healthc>{
 
   var hovering = false
 
+  var lastHealth = 0f
+  var lastShield = 0f
+  var lastAlpha = 1f
+  var lastScale = 1f
+  var lastN = 0
   val detailBuff = StringBuilder()
   val shieldBuff = StringBuilder()
+
+  var detailCache = FontCache(Fonts.outline)
+  var shieldCache = FontCache(Fonts.outline)
 
   var insectHealth = 0f
   var insectShield = 0f
@@ -49,6 +59,8 @@ class HealthModel: Model<Healthc>{
 }
 
 class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
+  private val trans = Mat()
+
   lateinit var style: HealthBarStyle
 
   override val layoutSide: Side = Side.TOP
@@ -78,7 +90,6 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   override fun HealthModel.shouldDisplay() = entity !is Buildingc || hovering
 
   override fun HealthModel.update(delta: Float) {
-    updateText()
     insectHealth = Mathf.lerp(insectHealth, entity.health(), delta*0.05f)
     shieldEnt?.also {
       insectShield = Mathf.lerp(insectShield, it.shield(), delta*0.05f)
@@ -97,6 +108,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     val teamC = entity.let{ if(it is Teamc) it.team().color else Color.white }
 
+    Draw.z(0f)
     Draw.color(c1.set(style.backgroundColor).mulA(alpha))
     style.background.draw(
       origX, origY, 0f, 0f,
@@ -158,60 +170,109 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
       )
     }
 
-    style.shieldBar?.also {
-      val n = Mathf.ceil((shieldEnt?.shield()?:0f)/entity.maxHealth())
+    Draw.z(10f)
+    val alp = if (hovering) 1f else alpha*(Mathf.clamp((scale - 0.5f)/0.5f))
+    if(alp > 0.001f){
+      updateText(drawWidth, scale, alp)
+      if (style.shieldBar != null) {
+        shieldCache.setPosition(origX, origY)
+        shieldCache.draw()
+      }
+      detailCache.setPosition(origX, origY)
+      detailCache.draw()
+    }
+  }
+
+  private fun shieldColor(teamC: Color, n: Int): Color = when(n % 3) {
+    0 -> if (teamC.diff(Pal.reactorPurple) < 0.1f) Pal.heal else Pal.reactorPurple
+    1 -> if (teamC.diff(Pal.accent) < 0.1f) HeAssets.lightBlue else Pal.accent
+    2 -> if (teamC.diff(Pal.heal) < 0.1f) Pal.lancerLaser else Pal.heal
+    else -> throw RuntimeException("wtf?")
+  }
+
+  private fun HealthModel.updateText(drawWidth: Float, scale: Float, alpha: Float){
+    if (detailCache.font != style.font) detailCache = FontCache(style.font)
+    if (shieldCache.font != style.font) shieldCache = FontCache(style.font)
+
+    val health = entity.health()
+    val shield = shieldEnt?.shield()?: 0f
+    if (scale != lastScale || health != lastHealth || (shield != lastShield)){
+      detailBuff.apply {
+        clear()
+        append("\uE813 ")
+        append(Mathf.round(health))
+        append("/")
+        append(Mathf.round(entity.maxHealth()))
+        if (shield > 0) {
+          append(" - ")
+          append("\uE84D ")
+          append(UI.formatAmount(Mathf.round(shield).toLong()))
+        }
+      }
+      detailCache.clear()
+      detailCache.color = c1.set(Color.white).a(alpha)
+      style.font.apply {
+        val pscale = getData().scaleX
+        val pint = usesIntegerPositions()
+        getData().setScale(scale*style.fontScl)
+        setUseIntegerPositions(false)
+        detailWidth = detailCache.setText(
+          detailBuff,
+          style.texOffX*Scl.scl(scale),
+          style.texOffY*Scl.scl(scale) + style.font.capHeight,
+          0f,
+          Align.topLeft,
+          false
+        ).width
+        getData().setScale(pscale)
+        setUseIntegerPositions(pint)
+      }
+
+      lastHealth = health
+      lastShield = shield
+    }
+
+    val n = Mathf.ceil((shieldEnt?.shield()?:0f)/entity.maxHealth())
+
+    if (scale != lastScale || lastN != n) {
+      shieldBuff.clear()
+      if (n > 1) shieldBuff.append("x").append(n)
+
       val fontColor =
         if (n >= 10000) Color.crimson
         else if (n >= 1000) Color.red
         else if (n >= 100) Pal.accent
         else if (n >= 10) Color.white
         else Color.lightGray
-      shieldWidth = style.font.draw(
-        shieldBuff,
-        origX + drawWidth - style.shieldsOffX*Scl.scl(scale),
-        origY + style.shieldsOffY*Scl.scl(scale) + style.font.capHeight*scale,
-        c1.set(fontColor).a(alpha),
-        scale*style.shieldFontScl,
-        false,
-        Align.topRight
-      ).width/scale
-    }
-
-    detailWidth = style.font.draw(
-      detailBuff,
-      origX + style.texOffX*Scl.scl(scale),
-      origY + style.texOffY*Scl.scl(scale) + style.font.capHeight*scale,
-      c1.set(Color.white).a(alpha),
-      scale*style.fontScl,
-      false,
-      Align.topLeft
-    ).width/scale
-  }
-
-  private fun shieldColor(teamC: Color, n: Int): Color = when(n % 3) {
-    0 -> if (teamC.diff(Pal.reactorPurple) < 0.1f) Pal.heal else Pal.reactorPurple
-    1 -> if (teamC.diff(Pal.accent) < 0.1f) HeStyles.lightBlue else Pal.accent
-    2 -> if (teamC.diff(Pal.heal) < 0.1f) Pal.lancerLaser else Pal.heal
-    else -> throw RuntimeException("wtf?")
-  }
-
-  private fun HealthModel.updateText(){
-    detailBuff.apply {
-      clear()
-      append("\uE813 ")
-      append(Mathf.round(entity.health()))
-      append("/")
-      append(Mathf.round(entity.maxHealth()))
-      if ((shieldEnt?.shield() ?: 0f) > 0) {
-        append(" - ")
-        append("\uE84D ")
-        append(UI.formatAmount(Mathf.round(shieldEnt!!.shield()).toLong()))
+      shieldCache.clear()
+      shieldCache.color = c1.set(fontColor).a(alpha)
+      style.font.apply {
+        val pscale = getData().scaleX
+        val pint = usesIntegerPositions()
+        getData().setScale(scale*style.shieldFontScl)
+        setUseIntegerPositions(false)
+        shieldWidth = shieldCache.setText(
+          shieldBuff,
+          drawWidth - style.shieldsOffX*Scl.scl(scale),
+          style.shieldsOffY*Scl.scl(scale) + style.font.capHeight,
+          0f,
+          Align.topRight,
+          false
+        ).width
+        getData().setScale(pscale)
+        setUseIntegerPositions(pint)
       }
+
+      lastN = n
     }
 
-    val n = Mathf.ceil((shieldEnt?.shield()?:0f)/entity.maxHealth())
-    shieldBuff.clear()
-    if (n > 1) shieldBuff.append("x").append(n)
+    if (!Mathf.equal(lastAlpha, alpha, 0.001f)){
+      detailCache.setAlphas(alpha)
+      shieldCache.setAlphas(alpha)
+    }
+
+    lastScale = scale
+    lastAlpha = alpha
   }
 }
 

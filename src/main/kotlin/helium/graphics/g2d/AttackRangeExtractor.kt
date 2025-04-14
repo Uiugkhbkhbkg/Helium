@@ -21,8 +21,8 @@ class AttackRangeExtractor {
 
   private var capturing = false
 
-  private var stroke = 2f
-  private var alpha = 0.1f
+  var stroke = 2f
+  var alpha = 0.1f
 
   private lateinit var extractShader: Shader
 

@@ -7,26 +7,19 @@ import arc.scene.style.Drawable
 import arc.scene.style.NinePatchDrawable
 import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.Dialog.DialogStyle
-import arc.util.Tmp
 import helium.Helium
 import helium.graphics.Blur
 import helium.graphics.DEf_B
 import helium.graphics.ScaledNinePatchClipDrawable
+import helium.ui.HeAssets.transparent
 import helium.ui.fragments.entityinfo.displays.HealthBarStyle
 import mindustry.game.EventType
-import mindustry.gen.Tex
 import mindustry.graphics.Pal
 import mindustry.ui.Fonts
 import mindustry.ui.Styles
 
 object HeStyles {
-  val lightBlue = Color.valueOf("D3FDFF")
-
   lateinit var BLUR_BACK: Drawable
-  lateinit var heIcon: Drawable
-  lateinit var transparent: Drawable
-  lateinit var grayUIAlpha: Drawable
-  lateinit var padGrayUIAlpha: Drawable
 
   lateinit var transparentBack: DialogStyle
 
@@ -71,17 +64,6 @@ object HeStyles {
       }
     }
 
-    heIcon = Helium.getDrawable("helium")
-
-    transparent = (Tex.whiteui as TextureRegionDrawable).tint(Color.clear)
-    grayUIAlpha = (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))
-    padGrayUIAlpha = ((Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))).also {
-      it.leftWidth = 8f
-      it.rightWidth = 8f
-      it.topHeight = 8f
-      it.bottomHeight = 8f
-    }
-
     transparentBack = object : DialogStyle() {
       init {
         stageBackground = transparent
@@ -102,9 +84,9 @@ object HeStyles {
       shieldPadRight = 5,
       font = Fonts.outline,
       texOffX = 15,
-      texOffY = 5,
+      texOffY = 7,
       shieldsOffX = 15,
-      shieldsOffY = 5
+      shieldsOffY = 7
     )
   }
 }

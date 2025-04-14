@@ -1,10 +1,12 @@
 package helium
 
 import arc.Core
+import arc.Events
 import arc.files.Fi
 import arc.scene.ui.layout.Table
 import helium.graphics.HeShaders
 import helium.graphics.g2d.AttackRangeExtractor
+import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.dialogs.ConfigCheck
 import helium.ui.dialogs.ConfigSepLine
@@ -16,9 +18,9 @@ import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
+import mindustry.game.EventType
 import mindustry.gen.Icon
 import mindustry.graphics.Pal
-import mindustry.mod.Mods.LoadedMod
 import mindustry.ui.Styles
 import mindustry.ui.dialogs.SettingsMenuDialog
 
@@ -27,7 +29,7 @@ object He {
     .also { it.isAccessible = true }
 
   /**本模组的文件位置 */
-  private val mod: LoadedMod = Vars.mods.getMod(Helium::class.java)
+  private val mod = Vars.mods.getMod(Helium::class.java)
 
   /**此模组的压缩包对象 */
   val modFile: Fi = mod.root
@@ -62,6 +64,7 @@ object He {
     )
     config.load()
 
+    HeAssets.load()
     HeShaders.load()
     HeStyles.load()
 
@@ -74,25 +77,34 @@ object He {
     configDialog = ModConfigDialog()
     setupSettings(configDialog)
 
+    setupGlobalListeners()
+
     //add config entry
     Vars.ui.settings.shown {
       val table = settingsMenu[Vars.ui.settings] as Table
       table.button(
         Core.bundle["settings.helium"],
-        HeStyles.heIcon,
+        HeAssets.heIcon,
         Styles.flatt,
         32f
       ) { configDialog.show() }.marginLeft(8f).row();
     }
   }
 
-  fun update() {
+  private fun setupGlobalListeners() {
+    Events.run(EventType.Trigger.update) { update() }
+    Events.run(EventType.Trigger.draw) { drawWorld() }
+
+    Events.on(EventType.ResetEvent::class.java) { entityInfo.reset() }
+  }
+
+  private fun update() {
     HeStyles.uiBlur.blurScl = config.blurScl
     HeStyles.uiBlur.blurSpace = config.blurSpace
     Styles.defaultDialog.stageBackground = if (config.enableBlur) HeStyles.BLUR_BACK else Styles.black9
   }
 
-  fun drawWorld() {
+  private fun drawWorld() {
     AttackRangeDisplay.resetTeamMark()
     entityInfo.drawWorld()
   }

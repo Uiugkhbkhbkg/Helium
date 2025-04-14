@@ -171,9 +171,8 @@ class Blur(vararg convolutions: Float = DEf_F) {
   }
 
   fun resize(width: Int, height: Int) {
-    var (w, h) = width to height
-    w /= blurScl
-    h /= blurScl
+    val w = width/blurScl
+    val h = height/blurScl
 
     buffer.resize(w, h)
     pingpong.resize(w, h)

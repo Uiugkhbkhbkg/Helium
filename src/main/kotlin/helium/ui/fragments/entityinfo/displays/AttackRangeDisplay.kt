@@ -2,9 +2,7 @@ package helium.ui.fragments.entityinfo.displays
 
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
-import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
-import arc.math.Angles
 import arc.math.Interp
 import arc.math.Mathf
 import arc.math.geom.Geometry
@@ -13,24 +11,97 @@ import arc.struct.Bits
 import arc.util.Time
 import arc.util.Tmp
 import helium.He.attackRenderer
+import helium.graphics.DrawUtils
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
 import mindustry.game.Team
 import mindustry.gen.Buildingc
 import mindustry.gen.Hitboxc
 import mindustry.gen.Posc
+import mindustry.gen.Unitc
 import mindustry.graphics.Layer
+import mindustry.graphics.Pal
 import mindustry.logic.Ranged
+import mindustry.world.blocks.defense.ForceProjector.ForceBuild
+import mindustry.world.blocks.defense.MendProjector.MendBuild
+import mindustry.world.blocks.defense.OverdriveProjector.OverdriveBuild
+import mindustry.world.blocks.defense.turrets.BaseTurret.BaseTurretBuild
+import mindustry.world.blocks.units.RepairTower
+import mindustry.world.blocks.units.RepairTurret
+import mindustry.world.meta.BlockStatus
 
 class AttackRangeModel: Model<Ranged> {
   override lateinit var entity: Ranged
+
+  var building: Buildingc? = null
+  var vis = 0f
+
   var hovering = false
+  var isUnit = false
+  var isTurret = false
+  var isRepair = false
+  var isOverdrive = false
+  var isForceField = false
+
+  var timeOffset = 0f
+  var phaseOffset = 0f
+  var phaseScl = 0f
+
+  val color = Color()
+  var alpha = 0f
+
+  var layerID = 0
+  var layerOffset = 0f
 
   override fun setup(ent: Ranged) {
+    timeOffset = Mathf.random(240f)
+    phaseOffset = Mathf.random(360f)
+    phaseScl = Mathf.random(0.9f, 1.1f)
+
+    if (ent is Buildingc) building = ent
+
+    when(ent) {
+      is Unitc -> isUnit = true
+      is BaseTurretBuild -> isTurret = true
+      is RepairTurret.RepairPointBuild -> isRepair = true
+      is RepairTower.RepairTowerBuild -> isRepair = true
+      is MendBuild -> isRepair = true
+      is OverdriveBuild -> isOverdrive = true
+    }
+
+    layerID = when{
+      isUnit || isTurret -> {
+        color.set(ent.team().color)
+        alpha = 0.125f
+        ent.team().id
+      }
+      isRepair -> {
+        color.set(Pal.heal)
+        alpha = 0.1f
+        260
+      }
+      isOverdrive -> {
+        color.set(0.731f, 0.522f, 0.425f, 1f)
+        alpha = 0.1f
+        261
+      }
+      else -> 300
+    }
+    layerOffset = layerID*0.01f
   }
 
   override fun reset() {
     hovering = false
+    isUnit = false
+    isTurret = false
+    isRepair = false
+    isOverdrive = false
+    isForceField = false
+    layerID = 0
+    layerOffset = 0f
+    color.set(Color.clear)
+    alpha = 0f
+    vis = 0f
   }
 }
 
@@ -45,7 +116,12 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
     }
   }
 
-  override fun valid(entity: Posc): Boolean = entity is Ranged
+  override fun AttackRangeModel.shouldDisplay() = vis > 0
+
+  override val worldRender: Boolean get() = true
+  override val screenRender: Boolean get() = false
+
+  override fun valid(entity: Posc): Boolean = entity is Ranged && entity !is ForceBuild
   override fun AttackRangeModel.checkWorldClip(worldViewport: Rect) = (entity.range()*2).let { clipSize ->
     worldViewport.overlaps(
       entity.x - clipSize/2, entity.y - clipSize/2,
@@ -59,9 +135,9 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
   }
 
   override fun AttackRangeModel.draw(alpha: Float) {
-    val team = entity.team()
-    val radius = entity.range()*alpha
-    val layer = Layer.light - 3 + team.id/100f
+    val a = (alpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
+    val radius = entity.range()*a
+    val layer = Layer.light - 3 + layerOffset
     val size = entity.let {
       when(it) {
         is Hitboxc -> it.hitSize()*1.44f
@@ -70,51 +146,59 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
       }
     }
 
-    if (!teamBits.get(team.id)){
-      teamBits.set(team.id)
-      Draw.drawRange(layer, 0.0005f, {
+    if (!teamBits.get(layerID)){
+      teamBits.set(layerID)
+      Draw.drawRange(layer, 0.0045f, {
         attackRenderer.capture()
       }) {
+        attackRenderer.alpha = this.alpha
         attackRenderer.render()
       }
     }
 
-    Draw.z(layer + 0.0001f)
-    Draw.color(Color.black, entity.team().color, alpha)
-    Fill.poly(entity.x, entity.y, 36, radius - 1f)
+    Draw.z(layer + 0.001f)
+    Draw.color(Color.black, color, a)
+    DrawUtils.fillCircle(entity.x, entity.y, radius - 1f)
 
-    Draw.z(layer + 0.0002f)
-    val r = (Time.globalTime + Mathf.randomSeed(entity.id().toLong(), 240f))%240/240f
+    Draw.z(layer + 0.002f)
+    val r = (Time.time*phaseScl + timeOffset)%240/240f
     val inner = Interp.pow3.apply(r)
     val outer = Interp.pow3Out.apply(r)
 
-    Fill.lightInner(
-      entity.x, entity.y, 24,
-      inner*radius, outer*radius, 0f,
-      Tmp.c1.set(Color.white).a(0f), Color.white
+    DrawUtils.innerLightCircle(
+      entity.x, entity.y,
+      inner*radius, outer*radius,
+      Tmp.c1.set(Color.white).a(0f), Color.white, 1
     )
 
-    val offAng = Mathf.randomSeed(entity.id().toLong() + 1, 360f)
+    val strokeOff = radius/16f
+    val ang = Time.time*phaseScl + phaseOffset
     for (i in 0 until 4) {
       val dir = Geometry.d4(i)
       val offX = dir.x*size*inner
       val offY = dir.y*size*inner
-      val toX = dir.x*(radius - 8f)*outer
-      val toY = dir.y*(radius - 8f)*outer
+      val toX = dir.x*(radius - strokeOff - 8f)*outer
+      val toY = dir.y*(radius - strokeOff - 8f)*outer
 
-      Lines.stroke(8f*(1 - inner)*alpha, Color.white)
+      val off = Tmp.v1.set(offX, offY).rotate(ang)
+      val to = Tmp.v2.set(toX, toY).rotate(ang)
+
+      Lines.stroke(strokeOff*(1 - inner)*a, Color.white)
       Lines.line(
-        entity.x + Angles.trnsx(Time.globalTime + offAng, offX, offY),
-        entity.y + Angles.trnsy(Time.globalTime + offAng, offX, offY),
-        entity.x + Angles.trnsx(Time.globalTime + offAng, toX, toY),
-        entity.y + Angles.trnsy(Time.globalTime + offAng, toX, toY),
+        entity.x + off.x, entity.y + off.y,
+        entity.x + to.x, entity.y + to.y
       )
     }
 
-    Draw.z(layer + 0.0003f)
+    Draw.z(layer + 0.003f)
     Lines.stroke(1f, Color.black)
-    Lines.poly(entity.x, entity.y, 36, radius + 1f)
+    DrawUtils.lineCircle(entity.x, entity.y, radius + 1f)
   }
 
-  override fun AttackRangeModel.update(delta: Float) {}
+  override fun AttackRangeModel.update(delta: Float) {
+    val to = building?.let {
+      if (it.status() != BlockStatus.noInput) 1f else 0f
+    }?:1f
+    if (!Mathf.equal(vis, to)) vis = Mathf.approach(vis, to, delta*0.04f)
+  }
 }
