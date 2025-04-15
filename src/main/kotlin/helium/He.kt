@@ -5,7 +5,7 @@ import arc.Events
 import arc.files.Fi
 import arc.scene.ui.layout.Table
 import helium.graphics.HeShaders
-import helium.graphics.g2d.AttackRangeExtractor
+import helium.graphics.g2d.EntityRangeExtractor
 import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.dialogs.ConfigCheck
@@ -13,8 +13,8 @@ import helium.ui.dialogs.ConfigSepLine
 import helium.ui.dialogs.ConfigSlider
 import helium.ui.dialogs.ModConfigDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
-import helium.ui.fragments.entityinfo.displays.AttackRangeDisplay
 import helium.ui.fragments.entityinfo.displays.DetailsDisplay
+import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
 import mindustry.Vars
@@ -45,20 +45,20 @@ object He {
   /**模组配置文件夹 */
   val configDirectory: Fi = modDirectory.child("config").child(INTERNAL_NAME)
 
-  lateinit var config: ModConfig
+  lateinit var config: HeConfig
 
   lateinit var entityInfo: EntityInfoFrag
   lateinit var healthBarDisplay: HealthDisplay
   lateinit var statusDisplay: StatusDisplay
   lateinit var detailsDisplay: DetailsDisplay
-  lateinit var attackRangeDisplay: AttackRangeDisplay
+  lateinit var entityRangeDisplay: EntityRangeDisplay
 
-  lateinit var attackRenderer: AttackRangeExtractor
+  lateinit var entityRangeRenderer: EntityRangeExtractor
 
   lateinit var configDialog: ModConfigDialog
 
   fun init() {
-    config = ModConfig(
+    config = HeConfig(
       configDirectory,
       internalConfigDir.child("mod_config.hjson")
     )
@@ -72,7 +72,7 @@ object He {
     entityInfo.build(Vars.ui.hudGroup)
     setupDisplays(entityInfo)
 
-    attackRenderer = AttackRangeExtractor()
+    entityRangeRenderer = EntityRangeExtractor()
 
     configDialog = ModConfigDialog()
     setupSettings(configDialog)
@@ -105,7 +105,7 @@ object He {
   }
 
   private fun drawWorld() {
-    AttackRangeDisplay.resetTeamMark()
+    EntityRangeDisplay.resetTeamMark()
     entityInfo.drawWorld()
   }
 
@@ -114,7 +114,7 @@ object He {
     infos.addDisplay(StatusDisplay().also { statusDisplay = it })
 
     infos.addDisplay(DetailsDisplay().also { detailsDisplay = it })
-    infos.addDisplay(AttackRangeDisplay().also { attackRangeDisplay = it })
+    infos.addDisplay(EntityRangeDisplay().also { entityRangeDisplay = it })
 
     healthBarDisplay.style = HeStyles.test
   }
@@ -130,20 +130,58 @@ object He {
       ),
       ConfigCheck(
         "enableBlur",
-        { config.enableBlur = it },
-        { config.enableBlur },
+        config::enableBlur
       ),
       ConfigSlider(
         "blurScl",
-        { f -> config.blurScl = f.toInt() },
-        { config.blurScl.toFloat() },
-        1f, 8f, 1f
+        config::blurScl,
+        1, 8, 1
       ),
       ConfigSlider(
         "blurSpace",
-        { f -> config.blurSpace = f },
-        { config.blurSpace },
+        config::blurSpace,
         0.5f, 8f, 0.25f
+      ),
+
+      ConfigSepLine(
+        "entityInfo",
+        Core.bundle["settings.basic.entityInfo"],
+        Pal.accent,
+        Pal.accentBack
+      ),
+      ConfigCheck(
+        "enableEntityInfoDisplay",
+        config::enableEntityInfoDisplay
+      ),
+      ConfigCheck(
+        "enableHealthBarDisplay",
+        config::enableHealthBarDisplay
+      ),
+      ConfigCheck(
+        "enableUnitStatusDisplay",
+        config::enableUnitStatusDisplay
+      ),
+      ConfigSlider(
+        "entityInfoScale",
+        config::entityInfoScale,
+        0.5f, 2f, 0.1f
+      ),
+      ConfigSlider(
+        "entityInfoAlpha",
+        config::entityInfoAlpha,
+        0.4f, 1f, 0.05f
+      ),
+      ConfigCheck(
+        "showAttackRange",
+        config::showAttackRange
+      ),
+      ConfigCheck(
+        "showHealRange",
+        config::showHealRange
+      ),
+      ConfigCheck(
+        "showOverdriveRange",
+        config::showOverdriveRange
       ),
     )
   }

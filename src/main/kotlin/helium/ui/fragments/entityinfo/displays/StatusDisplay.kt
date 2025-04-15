@@ -8,6 +8,7 @@ import arc.scene.ui.layout.Scl
 import arc.struct.Seq
 import arc.util.Align
 import arc.util.Tmp
+import helium.He
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
@@ -47,6 +48,7 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
     get() = iconSize
 
   override fun valid(entity: Posc) = entity is Statusc
+  override fun enabled() = He.config.enableUnitStatusDisplay
 
   override fun StatusModel.shouldDisplay(): Boolean {
     return statusList.any()

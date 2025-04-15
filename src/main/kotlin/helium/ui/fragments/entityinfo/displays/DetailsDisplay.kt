@@ -47,6 +47,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
   }
 
   override fun valid(entity: Posc) = entity is Displayable
+  override fun enabled() = true
 
   override fun DetailsModel?.checkHovering(isHovered: Boolean): Boolean {
     if (this != null) {

@@ -1,5 +1,10 @@
 {
-  "configVersion": 0,
+  "configVersion": 1,
+
+  //=====Debug/调试设置=====//
+
+  //启用加载信息
+  "loadInfo": true,
 
   //=====Basic/基础设置=====//
 
@@ -10,8 +15,22 @@
   //模糊强度
   "blurSpace": 1.25,
 
-  //实体信息刷新间隔
-  "entityInfoFlushInterval": -1,
+  //启用实体信息显示器
+  "enableEntityInfoDisplay": true,
+  //启用生命值面板
+  "enableHealthBarDisplay": true,
+  //启用状态指示器
+  "enableUnitStatusDisplay": true,
   //信息显示缩放
   "entityInfoScale": 1.0,
+  //信息指示器透明度
+  "entityInfoAlpha": 1.0,
+  //隐藏的队伍
+  "hiddenTeams": [],
+  //显示攻击范围
+  "showAttackRange": true,
+  //显示修复范围
+  "showHealRange": true,
+  //显示超速投影范围
+  "showOverdriveRange": true,
 }

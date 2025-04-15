@@ -27,6 +27,7 @@ abstract class EntityInfoDisplay<M: Model<*>>(
   open val worldRender: Boolean get() = false
 
   abstract fun valid(entity: Posc): Boolean
+  abstract fun enabled(): Boolean
 
   open fun M?.checkHovering(isHovered: Boolean) = isHovered
   open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {

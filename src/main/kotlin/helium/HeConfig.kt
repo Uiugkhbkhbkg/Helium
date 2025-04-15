@@ -3,34 +3,47 @@ package helium
 import arc.files.Fi
 import arc.util.Log
 import arc.util.serialization.Jval
-import java.io.BufferedReader
 import java.io.IOException
-import java.io.StringReader
-import java.io.StringWriter
 
 private typealias RArray = java.lang.reflect.Array
 
-class ModConfig(configDir: Fi, internalSource: Fi) {
+class HeConfig(configDir: Fi, internalSource: Fi) {
   companion object {
-    private const val configVersion = 0
-    private val configs = ModConfig::class.java.declaredFields
+    private val commentMatcher = Regex("(//.*)|(/\\*(.|\\s)+\\*/)")
+    private val keyMatcher = Regex("\"?(?<key>\\w+)\"?\\s*:\\s*")
+    private val jsonArrayMatcher = Regex("\\[(.|\\s)*]")
+    private val jsonObjectMatcher = Regex("\\{(.|\\s)*}")
+    private val jsonValueMatcher = Regex("(\".*\")|([\\w.]+)")
+
+    private val configs = HeConfig::class.java.declaredFields
       .filter { it.getAnnotation(ConfigItem::class.java) != null }
-      .sortedBy { it.getAnnotation(ConfigItem::class.java).order }
   }
 
-  private var lastContext: String? = null
+  private val configFile = configDir.child("mod_config.hjson")
+  private val configBack = configDir.child("mod_config.hjson.bak")
+  private val internalConfigFile = internalSource
+  private val configVersion = Jval.read(internalConfigFile.reader()).getInt("configVersion", 0)
+  
+  @ConfigItem var loadInfo = false
 
-  private val configFile: Fi = configDir.child("mod_config.hjson")
-  private val configBack: Fi = configDir.child("mod_config.hjson.bak")
-  private val internalConfigFile: Fi = internalSource
+  @ConfigItem var enableBlur = false
+  @ConfigItem var blurScl = 0
+  @ConfigItem var blurSpace = 0f
 
-  @ConfigItem(order = 0) var loadInfo = false
-  @ConfigItem(order = 1) var enableBlur = false
-  @ConfigItem(order = 2) var blurScl = 0
-  @ConfigItem(order = 3) var blurSpace = 0f
-
-  @ConfigItem(order = 4) var entityInfoFlushInterval = 0f
-  @ConfigItem(order = 5) var entityInfoScale = 0f
+  @ConfigItem var enableEntityInfoDisplay = true
+  @ConfigItem var enableHealthBarDisplay = true
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var enableUnitStatusDisplay = true
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var entityInfoScale = 0f
+  @ConfigItem var entityInfoAlpha = 0f
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var hiddenTeams = intArrayOf()
+  @ConfigItem var showAttackRange = true
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var showHealRange = true
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var showOverdriveRange = true
 
   fun load() {
     if (!configFile.exists()) {
@@ -43,10 +56,6 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
         configFile.copyTo(backup)
         internalConfigFile.copyTo(configFile)
         Log.info("default configuration file version updated, old config should be override(backup file for old file was created)")
-        load(configFile)
-        val tmp = lastContext
-        load(backup, true)
-        lastContext = tmp
         save()
       }
     }
@@ -54,28 +63,22 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
     if (loadInfo) printConfig()
   }
 
-  fun printConfig() {
+  private fun printConfig() {
     val results = StringBuilder()
 
     configs.forEach { cfg ->
-      try {
-        results.append("  ")
-            .append(cfg.name)
-            .append(" = ")
-            .append(cfg.get(this))
-            .append(";")
-            .append(System.lineSeparator())
-      } catch (e: IllegalAccessException) {
-        throw RuntimeException(e)
-      }
+      results.append("  ")
+          .append(cfg.name)
+          .append(" = ")
+          .append(cfg.get(this))
+          .append(";")
+          .append(System.lineSeparator())
     }
 
     Log.info("Mod config loaded! The config data:[${System.lineSeparator()}$results]")
   }
 
-  fun load(file: Fi): Boolean = load(file, false)
-
-  fun load(file: Fi, loadOld: Boolean): Boolean {
+  private fun load(file: Fi): Boolean {
     val sb = StringBuilder()
     file.reader().use { reader ->
       val part = CharArray(8192)
@@ -85,23 +88,15 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
       }
     }
 
-    lastContext = sb.toString()
-    val config = Jval.read(lastContext!!)
+    val config = Jval.read(file.reader())
 
     val old = config.get("configVersion").asInt() != configVersion
-    if (!loadOld && old) return false
 
     configs.forEach { cfg ->
       if (!config.has(cfg.name)) return@forEach
 
       val temp = config.get(cfg.name).toString()
-      try {
-        cfg.set(this, warp(cfg.type, temp))
-      } catch (e: IllegalArgumentException) {
-        Log.err(e.toString())
-      } catch (e: IllegalAccessException) {
-        Log.err(e.toString())
-      }
+      cfg.set(this, warp(cfg.type, temp))
     }
 
     return !old
@@ -116,7 +111,7 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun save(file: Fi) {
+  private fun save(file: Fi) {
     val tree = Jval.newObject()
     val map = tree.asObject()
     map.put("configVersion", Jval.valueOf(configVersion))
@@ -135,42 +130,54 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
       }
     }
 
-    val writer = StringWriter()
-    tree.writeTo(writer, Jval.Jformat.formatted)
+    val stringBuilder = StringBuilder()
 
-    val str = writer.buffer.toString()
-    val r1 = BufferedReader(StringReader(str))
-    val r2 = BufferedReader(StringReader(lastContext!!))
+    val fileContext = file.reader().readText()
+    var lastStart = 0
+    commentMatcher.findAll(fileContext).forEach { res ->
+      val end = res.range.first
+      val subString = fileContext.substring(lastStart, end)
 
-    file.writer(false).use { write ->
-      var line: String?
-      while (r2.readLine().also { line = it } != null) {
-        var i: Int
-        var after = ""
-        line?.let { currentLine ->
-          i = currentLine.indexOf("//")
-          if (i != -1) {
-            if (currentLine.substring(0, i).trim().isEmpty()) {
-              write.write(currentLine)
-            } else {
-              after = currentLine.substring(i)
-            }
-          } else if (currentLine.isEmpty()) {
-            write.write("")
-          }
+      handleText(subString, stringBuilder, map)
 
-          if (currentLine.isNotEmpty() && (i == -1 || after.isNotEmpty())) {
-            write.write(r1.readLine())
-          }
+      stringBuilder.append(res.value)
 
-          write.write(after)
-          write.write(System.lineSeparator())
-          write.flush()
-        }
-      }
+      lastStart = res.range.last + 1
     }
-    r1.close()
-    r2.close()
+    if (lastStart < fileContext.length) {
+      val subString = fileContext.substring(lastStart)
+      handleText(subString, stringBuilder, map)
+    }
+
+    file.writeString(stringBuilder.toString())
+  }
+
+  private fun handleText(
+    subString: String,
+    stringBuilder: StringBuilder,
+    map: Jval.JsonMap,
+  ) {
+    var lastKeyEnd = 0
+    keyMatcher.findAll(subString).forEach pair@{ key ->
+      val keyName = key.groups["key"]!!
+
+      val perpend = subString.substring(lastKeyEnd, key.range.first)
+      stringBuilder.append(perpend)
+
+      stringBuilder.append(key.value)
+      stringBuilder.append(map.get(keyName.value))
+
+      lastKeyEnd = key.range.last + 1
+    }
+    if (lastKeyEnd < subString.length) {
+      stringBuilder.append(
+        subString
+          .substring(lastKeyEnd)
+          .replace(jsonValueMatcher, "")
+          .replace(jsonArrayMatcher, "")
+          .replace(jsonObjectMatcher, "")
+      )
+    }
   }
 
   private fun pack(value: Any): Jval {
@@ -236,11 +243,10 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
     return res as T
   }
 
-  @Suppress("UNCHECKED_CAST")
   private fun <T: Enum<*>> firstEnum(type: Class<T>): T {
     if (!type.isEnum) throw RuntimeException("class $type was not an enum")
 
-    return (type.getMethod("values").invoke(null) as Array<T>)[0]
+    return type.enumConstants[0]
   }
 
   fun reset() {
@@ -253,4 +259,4 @@ class ModConfig(configDir: Fi, internalSource: Fi) {
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FIELD)
-annotation class ConfigItem(val order: Int)
+annotation class ConfigItem

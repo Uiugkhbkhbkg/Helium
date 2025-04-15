@@ -9,6 +9,7 @@ import arc.math.Mathf
 import arc.scene.ui.layout.Scl
 import arc.util.Align
 import arc.util.Tmp.c1
+import helium.He
 import helium.graphics.ClipDrawable
 import helium.ui.HeAssets
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
@@ -65,6 +66,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
   override val layoutSide: Side = Side.TOP
   override fun valid(entity: Posc) = entity is Healthc
+  override fun enabled() = He.config.enableHealthBarDisplay
 
   override fun HealthModel.realWidth(prefSize: Float) = prefSize
   override fun HealthModel.realHeight(prefSize: Float) = prefHeight

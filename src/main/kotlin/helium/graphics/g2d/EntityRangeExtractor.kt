@@ -9,7 +9,7 @@ import arc.graphics.gl.Shader
 import arc.util.Time
 import helium.Helium.Companion.getInternalFile
 
-class AttackRangeExtractor {
+class EntityRangeExtractor {
   companion object {
     private val internalShaderDir: Fi = getInternalFile("shaders")
   }
@@ -29,7 +29,7 @@ class AttackRangeExtractor {
   private fun setupShader() {
     extractShader = Shader(
       Core.files.internal("shaders/screenspace.vert"),
-      internalShaderDir.child("attack_range.frag")
+      internalShaderDir.child("entity_range.frag")
     )
     buffer.resize(Core.graphics.width, Core.graphics.height)
   }

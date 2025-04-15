@@ -10,7 +10,8 @@ import arc.math.geom.Rect
 import arc.struct.Bits
 import arc.util.Time
 import arc.util.Tmp
-import helium.He.attackRenderer
+import helium.He
+import helium.He.entityRangeRenderer
 import helium.graphics.DrawUtils
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
@@ -30,7 +31,7 @@ import mindustry.world.blocks.units.RepairTower
 import mindustry.world.blocks.units.RepairTurret
 import mindustry.world.meta.BlockStatus
 
-class AttackRangeModel: Model<Ranged> {
+class EntityRangeModel: Model<Ranged> {
   override lateinit var entity: Ranged
 
   var building: Buildingc? = null
@@ -41,7 +42,6 @@ class AttackRangeModel: Model<Ranged> {
   var isTurret = false
   var isRepair = false
   var isOverdrive = false
-  var isForceField = false
 
   var timeOffset = 0f
   var phaseOffset = 0f
@@ -96,7 +96,6 @@ class AttackRangeModel: Model<Ranged> {
     isTurret = false
     isRepair = false
     isOverdrive = false
-    isForceField = false
     layerID = 0
     layerOffset = 0f
     color.set(Color.clear)
@@ -105,7 +104,7 @@ class AttackRangeModel: Model<Ranged> {
   }
 }
 
-class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeModel) {
+class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeModel) {
   companion object {
     private val teamBits = Bits(Team.all.size)
     private var dashes = 0f
@@ -116,25 +115,36 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
     }
   }
 
-  override fun AttackRangeModel.shouldDisplay() = vis > 0
+  override fun EntityRangeModel.shouldDisplay() =
+    vis > 0
+    && !He.config.hiddenTeams.contains(entity.team().id)
+    && (
+      ((isUnit || isTurret) && He.config.showAttackRange)
+      || (isRepair && He.config.showHealRange)
+      || (isOverdrive && He.config.showOverdriveRange)
+    )
 
   override val worldRender: Boolean get() = true
   override val screenRender: Boolean get() = false
 
   override fun valid(entity: Posc): Boolean = entity is Ranged && entity !is ForceBuild
-  override fun AttackRangeModel.checkWorldClip(worldViewport: Rect) = (entity.range()*2).let { clipSize ->
+  override fun enabled() = He.config.let {
+    it.showAttackRange || it.showHealRange || it.showOverdriveRange
+  }
+
+  override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (entity.range()*2).let { clipSize ->
     worldViewport.overlaps(
       entity.x - clipSize/2, entity.y - clipSize/2,
       clipSize, clipSize
     )
   }
 
-  override fun AttackRangeModel?.checkHovering(isHovered: Boolean): Boolean {
+  override fun EntityRangeModel?.checkHovering(isHovered: Boolean): Boolean {
     this?.hovering = isHovered
     return isHovered
   }
 
-  override fun AttackRangeModel.draw(alpha: Float) {
+  override fun EntityRangeModel.draw(alpha: Float) {
     val a = (alpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
     val radius = entity.range()*a
     val layer = Layer.light - 3 + layerOffset
@@ -149,10 +159,10 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
     if (!teamBits.get(layerID)){
       teamBits.set(layerID)
       Draw.drawRange(layer, 0.0045f, {
-        attackRenderer.capture()
+        entityRangeRenderer.capture()
       }) {
-        attackRenderer.alpha = this.alpha
-        attackRenderer.render()
+        entityRangeRenderer.alpha = this.alpha
+        entityRangeRenderer.render()
       }
     }
 
@@ -195,7 +205,7 @@ class AttackRangeDisplay: WorldDrawOnlyDisplay<AttackRangeModel>(::AttackRangeMo
     DrawUtils.lineCircle(entity.x, entity.y, radius + 1f)
   }
 
-  override fun AttackRangeModel.update(delta: Float) {
+  override fun EntityRangeModel.update(delta: Float) {
     val to = building?.let {
       if (it.status() != BlockStatus.noInput) 1f else 0f
     }?:1f

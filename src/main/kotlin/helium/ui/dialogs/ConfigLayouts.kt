@@ -16,6 +16,7 @@ import arc.util.Strings
 import helium.ui.dialogs.ModConfigDialog.ConfigLayout
 import mindustry.graphics.Pal
 import mindustry.ui.Styles
+import kotlin.reflect.KMutableProperty0
 
 class ConfigSepLine(
   name: String,
@@ -98,6 +99,8 @@ class ConfigCheck(
   private var click: Boolc,
   private var checked: Boolp
 ): ConfigEntry(name) {
+  constructor(name: String, field: KMutableProperty0<Boolean>): this(name, { field.set(it) }, { field.get() })
+
   override fun buildCfg(table: Table) {
     table.check("", checked.get(), click)
       .update { c -> c.isChecked = checked.get() }
@@ -150,10 +153,22 @@ class ConfigSlider : ConfigEntry {
 
   constructor(
     name: String,
-    show: Func<Float, String>,
+    field: KMutableProperty0<Float>,
+    min: Float, max: Float, step: Float
+  ) : this(name, { field.set(it) }, { field.get() }, min, max, step)
+
+  constructor(
+    name: String,
+    field: KMutableProperty0<Int>,
+    min: Int, max: Int, step: Int
+  ) : this(name, { field.set(it.toInt()) }, { field.get().toFloat() }, min.toFloat(), max.toFloat(), step.toFloat())
+
+  constructor(
+    name: String,
     slided: Floatc,
     curr: Floatp,
-    min: Float, max: Float, step: Float
+    min: Float, max: Float, step: Float,
+    show: Func<Float, String>,
   ) : super(name) {
     this.show = show
     this.slided = slided
@@ -162,6 +177,13 @@ class ConfigSlider : ConfigEntry {
     this.max = max
     this.step = step
   }
+
+  constructor(
+    name: String,
+    field: KMutableProperty0<Float>,
+    min: Float, max: Float, step: Float,
+    show: Func<Float, String>,
+  ) : this(name, { field.set(it) }, { field.get() }, min, max, step, show)
 
   override fun buildCfg(table: Table) {
     if (str == null) {
