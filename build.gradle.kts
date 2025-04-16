@@ -6,8 +6,8 @@ import java.io.StringReader
 import java.util.jar.JarEntry
 import java.util.jar.JarOutputStream
 
-val mindustryVersion = "851817a049"
-val arcVersion = "deacd9c98e"
+val mindustryVersion = "v147.1"
+val arcVersion = "v147.1"
 
 val modOutputDir = properties["modOutputDir"] as? String
 
@@ -23,7 +23,7 @@ plugins {
 }
 
 group = "com.github.EB-wilson"
-version = "beta-0.1"
+version = "beta-0.2"
 
 run { "java SyncBundles.java $version".execute() }
 

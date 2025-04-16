@@ -79,7 +79,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     when(it) {
       is Hitboxc -> max(it.hitSize()*8f, minWidth)
-      is Buildingc -> max(it.block().size*Vars.tilesize*8f, minWidth)
+      is Building -> max(it.block.size*Vars.tilesize*8f, minWidth)
       else -> minWidth
     }
   }
@@ -89,7 +89,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     this?.hovering = isHovered
     return isHovered
   }
-  override fun HealthModel.shouldDisplay() = entity !is Buildingc || hovering
+  override fun HealthModel.shouldDisplay() = entity !is Building || hovering
 
   override fun HealthModel.update(delta: Float) {
     insectHealth = Mathf.lerp(insectHealth, entity.health(), delta*0.05f)
@@ -172,6 +172,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
       )
     }
 
+    //The texture of the text is decoupled from the UI, should be drawn in groups to optimize performance
     Draw.z(10f)
     val alp = if (hovering) 1f else alpha*(Mathf.clamp((scale - 0.5f)/0.5f))
     if(alp > 0.001f){

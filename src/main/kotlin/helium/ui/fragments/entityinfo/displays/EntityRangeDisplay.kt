@@ -16,10 +16,7 @@ import helium.graphics.DrawUtils
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
 import mindustry.game.Team
-import mindustry.gen.Buildingc
-import mindustry.gen.Hitboxc
-import mindustry.gen.Posc
-import mindustry.gen.Unitc
+import mindustry.gen.*
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.logic.Ranged
@@ -36,7 +33,7 @@ import mindustry.world.meta.BlockStatus
 class EntityRangeModel: Model<Ranged> {
   override lateinit var entity: Ranged
 
-  var building: Buildingc? = null
+  var building: Building? = null
   var vis = 0f
 
   var hovering = false
@@ -60,7 +57,7 @@ class EntityRangeModel: Model<Ranged> {
     phaseOffset = Mathf.random(360f)
     phaseScl = Mathf.random(0.9f, 1.1f)
 
-    if (ent is Buildingc) building = ent
+    if (ent is Building) building = ent
 
     when(ent) {
       is Unitc -> isUnit = true
@@ -237,7 +234,7 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
   }
 
   private fun drawTurretAttackCone(turretBuild: TurretBuild) {
-    val block = turretBuild.block() as Turret
+    val block = turretBuild.block as Turret
     val dir = turretBuild.buildRotation()
     val coneAngle = block.shootCone
     val offset = Tmp.v1.set(block.shootX, block.shootY).rotate(turretBuild.buildRotation() - 90)

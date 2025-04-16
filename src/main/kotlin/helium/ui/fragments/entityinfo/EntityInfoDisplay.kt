@@ -5,7 +5,7 @@ import arc.math.geom.Rect
 import arc.scene.Element
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
-import mindustry.gen.Buildingc
+import mindustry.gen.Building
 import mindustry.gen.Drawc
 import mindustry.gen.Posc
 
@@ -33,7 +33,7 @@ abstract class EntityInfoDisplay<M: Model<*>>(
   open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {
     val clipSize = when(it){
       is Drawc -> it.clipSize()
-      is Buildingc -> it.block().clipSize
+      is Building -> it.block.clipSize
       else -> 10f
     }
     worldViewport.overlaps(it.x - clipSize/2, it.y - clipSize/2, clipSize, clipSize)

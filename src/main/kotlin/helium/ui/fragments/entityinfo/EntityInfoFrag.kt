@@ -335,8 +335,8 @@ class EntityInfoFrag {
 
     return when(entity){
       is Hitboxc -> rect.overlaps(Tmp.r1.also { entity.hitbox(it) })
-      is Buildingc -> {
-        val block = entity.block()
+      is Building -> {
+        val block = entity.block
         val size = (block.size*Vars.tilesize).toFloat()
         return rect.overlaps(
           entity.x - size/2, entity.y - size/2,
@@ -509,7 +509,7 @@ class EntityEntry : Poolable {
   val size: Float get() = entity.let {
     when (it) {
       is Hitboxc -> it.hitSize()/1.44f
-      is Buildingc -> it.block().size*Vars.tilesize/2f
+      is Building -> it.block.size*Vars.tilesize/2f
       else -> 10f
     }
   }
