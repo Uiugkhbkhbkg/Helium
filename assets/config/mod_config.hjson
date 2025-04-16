@@ -21,6 +21,8 @@
   "enableHealthBarDisplay": true,
   //启用状态指示器
   "enableUnitStatusDisplay": true,
+  //实体信息控制热键
+  "entityInfoHotKey": "altLeft",
   //信息显示缩放
   "entityInfoScale": 1.0,
   //信息指示器透明度

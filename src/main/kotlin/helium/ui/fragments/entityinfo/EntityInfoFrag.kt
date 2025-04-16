@@ -146,7 +146,7 @@ class EntityInfoFrag {
       Fill.rect(rect)
     }
 
-    if (Core.input.alt()) {
+    if (Core.input.keyDown(config.entityInfoHotKey)) {
       currHov.forEach { e ->
         val rad = e.size*1.44f + Mathf.absin(4f, 2f)
         val origX = e.entity.x
@@ -206,7 +206,8 @@ class EntityInfoFrag {
 
   private fun updateShowing() {
     val mouse = Core.input.mouseWorld()
-    if (Core.input.alt()) {
+    val hotkeyDown = Core.input.keyDown(config.entityInfoHotKey)
+    if (hotkeyDown) {
       if (!selecting && Core.input.keyDown(Binding.select)) {
         selecting = true
         selectStart.set(mouse)
@@ -259,7 +260,7 @@ class EntityInfoFrag {
       }
     }
 
-    if (selecting && !(Core.input.keyDown(Binding.select) && Core.input.alt())){
+    if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
       if (currHov.isEmpty) hovering.clear()
       else {
         var anyAdded = currHov.size > hovering.size
@@ -485,7 +486,8 @@ class EntityInfoFrag {
     Draw.sort(false)
   }
 
-  private fun checkIsHovering(e: EntityEntry) = hovering.contains(e) || (Core.input.alt() && currHov.contains(e))
+  private fun checkIsHovering(e: EntityEntry) =
+    hovering.contains(e) || (Core.input.keyDown(config.entityInfoHotKey) && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {

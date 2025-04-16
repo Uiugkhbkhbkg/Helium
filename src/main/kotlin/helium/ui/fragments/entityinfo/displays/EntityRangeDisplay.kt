@@ -27,6 +27,8 @@ import mindustry.world.blocks.defense.ForceProjector.ForceBuild
 import mindustry.world.blocks.defense.MendProjector.MendBuild
 import mindustry.world.blocks.defense.OverdriveProjector.OverdriveBuild
 import mindustry.world.blocks.defense.turrets.BaseTurret.BaseTurretBuild
+import mindustry.world.blocks.defense.turrets.Turret
+import mindustry.world.blocks.defense.turrets.Turret.TurretBuild
 import mindustry.world.blocks.units.RepairTower
 import mindustry.world.blocks.units.RepairTurret
 import mindustry.world.meta.BlockStatus
@@ -106,11 +108,14 @@ class EntityRangeModel: Model<Ranged> {
 
 class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeModel) {
   companion object {
+    private var coneDrawing = false
+
     private val teamBits = Bits(Team.all.size)
     private var dashes = 0f
 
-    fun resetTeamMark(){
+    fun resetMark(){
       teamBits.clear()
+      coneDrawing = false
       dashes = 0f
     }
   }
@@ -203,6 +208,44 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     Draw.z(layer + 0.003f)
     Lines.stroke(1f, Color.black)
     DrawUtils.lineCircle(entity.x, entity.y, radius + 1f)
+
+    if (hovering) {
+      Draw.z(Layer.light + 5)
+      Draw.color(entity.team().color, 0.1f + Mathf.absin(8f, 0.15f))
+      if (isTurret && entity is TurretBuild) drawTurretAttackCone(entity as TurretBuild)
+      else if (isUnit) drawUnitAttackCone(entity as Unitc)
+    }
+  }
+
+  private fun drawUnitAttackCone(unit: Unitc) {
+    unit.mounts().forEach { weapon ->
+      val type = weapon.weapon
+      val coneAngle = type.shootCone
+      val weaponRot = if (weapon.rotate) weapon.rotation else type.baseRotation
+      val dir = weaponRot + unit.rotation()
+      val off = Tmp.v1.set(type.x, type.y).rotate(unit.rotation() - 90)
+      off.add(Tmp.v2.set(type.shootX, type.shootY).rotate(unit.rotation() - 90 + weaponRot))
+
+      val dx = unit.x() + off.x
+      val dy = unit.y() + off.y
+
+      DrawUtils.circleFan(
+        dx, dy, type.range(),
+        coneAngle*2, dir - coneAngle
+      )
+    }
+  }
+
+  private fun drawTurretAttackCone(turretBuild: TurretBuild) {
+    val block = turretBuild.block() as Turret
+    val dir = turretBuild.buildRotation()
+    val coneAngle = block.shootCone
+    val offset = Tmp.v1.set(block.shootX, block.shootY).rotate(turretBuild.buildRotation() - 90)
+
+    DrawUtils.circleFan(
+   turretBuild.x() + offset.x, turretBuild.y() + offset.y,
+      block.range, coneAngle*2, dir - coneAngle
+    )
   }
 
   override fun EntityRangeModel.update(delta: Float) {

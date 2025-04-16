@@ -37,10 +37,10 @@ void main() {
 
     float time = u_time*0.1;
     float a =
-    sin((worldCoord.x + worldCoord.y)*0.0831 + time) +
-    sin((-worldCoord.x + worldCoord.y)*0.075 + time) +
-    sin((worldCoord.x - worldCoord.y)*0.0546 + time) +
-    sin((-worldCoord.x - worldCoord.y)*0.03432 + time);
+    sin((worldCoord.x + worldCoord.y)*0.0831 + time*0.0095) +
+    sin((-worldCoord.x + worldCoord.y)*0.075 + time*0.056) +
+    sin((worldCoord.x - worldCoord.y)*0.0546 + time*0.21) +
+    sin((-worldCoord.x - worldCoord.y)*0.03432 + time*0.712);
     a = (a/4.0 + 1.0)/2.0;
 
     float s = length(base.rgb);

@@ -105,7 +105,7 @@ object He {
   }
 
   private fun drawWorld() {
-    EntityRangeDisplay.resetTeamMark()
+    EntityRangeDisplay.resetMark()
     entityInfo.drawWorld()
   }
 

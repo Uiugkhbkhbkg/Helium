@@ -1,7 +1,9 @@
 package helium
 
 import arc.files.Fi
+import arc.input.KeyCode
 import arc.util.Log
+import arc.util.Threads
 import arc.util.serialization.Jval
 import java.io.IOException
 
@@ -9,6 +11,7 @@ private typealias RArray = java.lang.reflect.Array
 
 class HeConfig(configDir: Fi, internalSource: Fi) {
   companion object {
+    private var exec = Threads.unboundedExecutor("HTTP", 1)
     private val commentMatcher = Regex("(//.*)|(/\\*(.|\\s)+\\*/)")
     private val keyMatcher = Regex("\"?(?<key>\\w+)\"?\\s*:\\s*")
     private val jsonArrayMatcher = Regex("\\[(.|\\s)*]")
@@ -17,6 +20,8 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
 
     private val configs = HeConfig::class.java.declaredFields
       .filter { it.getAnnotation(ConfigItem::class.java) != null }
+
+    private var saving = false
   }
 
   private val configFile = configDir.child("mod_config.hjson")
@@ -24,19 +29,20 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
   private val internalConfigFile = internalSource
   private val configVersion = Jval.read(internalConfigFile.reader()).getInt("configVersion", 0)
   
-  @ConfigItem var loadInfo = false
+  @ConfigItem var loadInfo = true
 
-  @ConfigItem var enableBlur = false
-  @ConfigItem var blurScl = 0
-  @ConfigItem var blurSpace = 0f
+  @ConfigItem var enableBlur = true
+  @ConfigItem var blurScl = 4
+  @ConfigItem var blurSpace = 1.25f
 
   @ConfigItem var enableEntityInfoDisplay = true
   @ConfigItem var enableHealthBarDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var enableUnitStatusDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
-  @ConfigItem var entityInfoScale = 0f
-  @ConfigItem var entityInfoAlpha = 0f
+  @ConfigItem var entityInfoHotKey = KeyCode.altLeft
+  @ConfigItem var entityInfoScale = 1f
+  @ConfigItem var entityInfoAlpha = 1f
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var hiddenTeams = intArrayOf()
   @ConfigItem var showAttackRange = true
@@ -70,7 +76,22 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
       results.append("  ")
           .append(cfg.name)
           .append(" = ")
-          .append(cfg.get(this))
+          .append(
+            cfg.get(this).let {
+              when(it){
+                is Array<*> -> it.contentToString()
+                is ByteArray -> it.contentToString()
+                is ShortArray -> it.contentToString()
+                is IntArray -> it.contentToString()
+                is LongArray -> it.contentToString()
+                is FloatArray -> it.contentToString()
+                is DoubleArray -> it.contentToString()
+                is CharArray -> it.contentToString()
+                is BooleanArray -> it.contentToString()
+                else -> it.toString()
+              }
+            }
+          )
           .append(";")
           .append(System.lineSeparator())
     }
@@ -102,12 +123,21 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     return !old
   }
 
+  fun saveAsync(force: Boolean = false) {
+    if (!force && saving) return
+    exec.submit {
+      save()
+    }
+  }
+
   fun save() {
+    saving = true
     try {
       save(configFile)
     } catch (e: IOException) {
       Log.err(e.toString())
     }
+    saving = false
   }
 
   @Suppress("UNCHECKED_CAST")

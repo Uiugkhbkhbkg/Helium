@@ -3,6 +3,7 @@ package helium.graphics
 import arc.Core
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
+import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
 import arc.graphics.g2d.TextureRegion
 import arc.graphics.gl.FrameBuffer
@@ -210,6 +211,31 @@ object DrawUtils {
         x, y, radius,
         dashDeg/360f, rotate + i*step,
         (360/dashDeg).toInt()*2
+      )
+    }
+  }
+
+  fun circleFan(
+    x: Float, y: Float, radius: Float,
+    angle: Float, rotate: Float = 0f, sides: Int = 72
+  ){
+    val step = 360f/sides
+    val s = (angle/360*sides).toInt()
+
+    for (i in 0 until s) {
+      val offX1 = Mathf.cosDeg(rotate + i*step)
+      val offY1 = Mathf.sinDeg(rotate + i*step)
+      val offX2 = Mathf.cosDeg(rotate + (i + 1)*step)
+      val offY2 = Mathf.sinDeg(rotate + (i + 1)*step)
+
+      v1.set(offX1, offY1).scl(radius).add(x, y)
+      v2.set(offX2, offY2).scl(radius).add(x, y)
+
+      Fill.quad(
+        x, y,
+        v1.x, v1.y,
+        v2.x, v2.y,
+        x, y
       )
     }
   }
