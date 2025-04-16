@@ -100,11 +100,17 @@ class EntityInfoFrag {
   fun build(parent: Group){
     infoFill = object: Group(){
       override fun draw() {
+        if (!config.enableEntityInfoDisplay) return
         drawHUDLay()
         super.draw()
       }
 
       override fun act(delta: Float) {
+        if (!config.enableEntityInfoDisplay){
+          if (all.any()) reset()
+          return
+        }
+
         super.act(delta)
 
         updateShowing()
@@ -126,6 +132,8 @@ class EntityInfoFrag {
   }
 
   fun drawWorld(){
+    if (!config.enableEntityInfoDisplay) return
+
     val alpha = config.entityInfoAlpha
 
     Core.camera.bounds(worldViewport)
