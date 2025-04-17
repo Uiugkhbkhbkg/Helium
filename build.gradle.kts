@@ -66,7 +66,6 @@ dependencies {
   //implementation("com.github.EB-wilson.UniverseCore:markdown:2.1.1")
 
   implementation(kotlin("stdlib-jdk8"))
-  implementation(kotlin("reflect"))
 }
 
 tasks {

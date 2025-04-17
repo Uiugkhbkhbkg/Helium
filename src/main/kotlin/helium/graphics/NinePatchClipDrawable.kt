@@ -5,24 +5,26 @@ import arc.graphics.g2d.Draw
 import arc.graphics.g2d.NinePatch
 import arc.math.Mathf
 import arc.scene.style.NinePatchDrawable
+import helium.util.accessField
+import helium.util.accessInt
 
 @Suppress("LeakingThis")
 open class NinePatchClipDrawable: BaseClipDrawable {
   companion object {
     private val tmpColor = Color()
 
-    private val clazz = NinePatch::class.java
-    private val idxField = clazz.getDeclaredField("idx").also { it.isAccessible = true }
-    private val botLeftField = clazz.getDeclaredField("bottomLeft").also { it.isAccessible = true }
-    private val botCenterField = clazz.getDeclaredField("bottomCenter").also { it.isAccessible = true }
-    private val botRightField = clazz.getDeclaredField("bottomRight").also { it.isAccessible = true }
-    private val midLeftField = clazz.getDeclaredField("middleLeft").also { it.isAccessible = true }
-    private val midCenterField = clazz.getDeclaredField("middleCenter").also { it.isAccessible = true }
-    private val midRightField = clazz.getDeclaredField("middleRight").also { it.isAccessible = true }
-    private val topLeftField = clazz.getDeclaredField("topLeft").also { it.isAccessible = true }
-    private val topCenterField = clazz.getDeclaredField("topCenter").also { it.isAccessible = true }
-    private val topRightField = clazz.getDeclaredField("topRight").also { it.isAccessible = true }
-    private val verticesField = clazz.getDeclaredField("vertices").also { it.isAccessible = true }
+    private val clazz = NinePatch::class
+    private val NinePatch.idxField by clazz.accessInt("idx")
+    private val NinePatch.botLeftField by clazz.accessInt("bottomLeft")
+    private val NinePatch.botCenterField by clazz.accessInt("bottomCenter")
+    private val NinePatch.botRightField by clazz.accessInt("bottomRight")
+    private val NinePatch.midLeftField by clazz.accessInt("middleLeft")
+    private val NinePatch.midCenterField by clazz.accessInt("middleCenter")
+    private val NinePatch.midRightField by clazz.accessInt("middleRight")
+    private val NinePatch.topLeftField by clazz.accessInt("topLeft")
+    private val NinePatch.topCenterField by clazz.accessInt("topCenter")
+    private val NinePatch.topRightField by clazz.accessInt("topRight")
+    private val NinePatch.verticesField by accessField<NinePatch, FloatArray>("vertices")
   }
 
   protected lateinit var ninePatch: NinePatch
@@ -142,19 +144,21 @@ open class NinePatchClipDrawable: BaseClipDrawable {
     topHeight = patch.padTop
     bottomHeight = patch.padBottom
 
-    idx = idxField.getInt(patch)
+    patch.apply {
+      idx = idxField
 
-    bottomLeft = botLeftField.getInt(patch)
-    bottomCenter = botCenterField.getInt(patch)
-    bottomRight = botRightField.getInt(patch)
-    middleLeft = midLeftField.getInt(patch)
-    middleCenter = midCenterField.getInt(patch)
-    middleRight = midRightField.getInt(patch)
-    topLeft = topLeftField.getInt(patch)
-    topCenter = topCenterField.getInt(patch)
-    topRight = topRightField.getInt(patch)
+      bottomLeft = botLeftField
+      bottomCenter = botCenterField
+      bottomRight = botRightField
+      middleLeft = midLeftField
+      middleCenter = midCenterField
+      middleRight = midRightField
+      topLeft = topLeftField
+      topCenter = topCenterField
+      topRight = topRightField
 
-    originVert = verticesField.get(patch) as FloatArray
+      originVert = verticesField
+    }
   }
 
   /** Creates a new drawable that renders the same as this drawable tinted the specified color.  */

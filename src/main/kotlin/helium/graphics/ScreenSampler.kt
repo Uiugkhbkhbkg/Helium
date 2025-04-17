@@ -94,8 +94,6 @@ object ScreenSampler {
   /**将当前的屏幕纹理使用传入的着色器绘制到屏幕上
    * @param unit 屏幕采样纹理绑定的纹理单元
    */
-  /**将当前的屏幕纹理使用传入的着色器绘制到屏幕上 */
-  @JvmOverloads
   fun blit(shader: Shader, unit: Int = 0) {
     checkNotNull(currBuffer) { "currently no buffer bound" }
 

@@ -17,6 +17,7 @@ import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
 import helium.ui.fragments.entityinfo.displays.HealthDisplay
 import helium.ui.fragments.entityinfo.displays.StatusDisplay
+import helium.ui.fragments.placement.HePlacementFrag
 import mindustry.Vars
 import mindustry.game.EventType
 import mindustry.gen.Icon
@@ -47,6 +48,7 @@ object He {
 
   lateinit var config: HeConfig
 
+  lateinit var placement: HePlacementFrag
   lateinit var entityInfo: EntityInfoFrag
   lateinit var healthBarDisplay: HealthDisplay
   lateinit var statusDisplay: StatusDisplay
@@ -68,6 +70,8 @@ object He {
     HeShaders.load()
     HeStyles.load()
 
+    placement = HePlacementFrag()
+    placement.build(Vars.ui.hudGroup)
     entityInfo = EntityInfoFrag()
     entityInfo.build(Vars.ui.hudGroup)
     setupDisplays(entityInfo)

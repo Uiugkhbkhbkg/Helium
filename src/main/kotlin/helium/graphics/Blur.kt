@@ -1,10 +1,11 @@
 package helium.graphics
 
 import arc.Core
+import arc.graphics.Blending
 import arc.graphics.Color
-import arc.graphics.Gl
 import arc.graphics.gl.FrameBuffer
 import arc.graphics.gl.Shader
+import arc.util.Log
 import kotlin.math.abs
 
 val DEf_A: FloatArray = floatArrayOf(
@@ -53,15 +54,15 @@ private const val vertTemplate =
   attribute vec4 a_position;
   attribute vec2 a_texCoord0;
   
-  uniform vec2 dir;
-  uniform vec2 size;
+  uniform vec2 u_dir;
+  uniform vec2 u_size;
   
   varying vec2 v_texCoords;
   
   %varying%
   
   void main(){
-    vec2 len = dir/size;
+    vec2 len = u_dir/u_size;
   
     v_texCoords = a_texCoord0;
     %assignVar%
@@ -73,7 +74,7 @@ private const val fragmentTemplate =
   uniform lowp sampler2D u_texture0;
   uniform lowp sampler2D u_texture1;
   
-  uniform lowp float def_alpha;
+  uniform lowp float u_def_alpha;
   
   varying vec2 v_texCoords;
   
@@ -92,7 +93,7 @@ private const val fragmentTemplate =
     }
     else{
       gl_FragColor.rgb = color;
-      gl_FragColor.a = def_alpha;
+      gl_FragColor.a = u_def_alpha;
     }
   }
   """
@@ -167,6 +168,9 @@ class Blur(vararg convolutions: Float = DEf_F) {
       .replace("%varying%", varyings.toString())
       .replace("%convolution%", convolution.toString())
 
+    Log.info(vertexShader)
+    Log.info(fragmentShader)
+
     return Shader(vertexShader, fragmentShader)
   }
 
@@ -178,7 +182,7 @@ class Blur(vararg convolutions: Float = DEf_F) {
     pingpong.resize(w, h)
 
     blurShader.bind()
-    blurShader.setUniformf("size", w.toFloat(), h.toFloat())
+    blurShader.setUniformf("u_size", w.toFloat(), h.toFloat())
   }
 
   fun capture() {
@@ -194,25 +198,23 @@ class Blur(vararg convolutions: Float = DEf_F) {
     capturing = false
     buffer.end()
 
-    Gl.disable(Gl.blend)
-    Gl.disable(Gl.depthTest)
-    Gl.depthMask(false)
+    Blending.disabled.apply()
+
+    blurShader.bind()
+    blurShader.apply()
+    blurShader.setUniformf("u_dir", blurSpace, 0f)
+    blurShader.setUniformf("u_def_alpha", 1f)
+    buffer.texture.bind(0)
 
     pingpong.begin()
-    blurShader.bind()
-    blurShader.setUniformf("dir", blurSpace, 0f)
-    blurShader.setUniformi("def_alpha", 1)
-    buffer.texture.bind(0)
     ScreenSampler.blit(blurShader, 1)
     pingpong.end()
 
-    blurShader.bind()
-    blurShader.setUniformf("dir", 0f, blurSpace)
-    blurShader.setUniformf("def_alpha", 0f)
+    blurShader.setUniformf("u_dir", 0f, blurSpace)
+    blurShader.setUniformf("u_def_alpha", 0f)
     pingpong.texture.bind(1)
 
-    Gl.enable(Gl.blend)
-    Gl.blendFunc(Gl.srcAlpha, Gl.oneMinusSrcAlpha)
+    Blending.normal.apply()
     buffer.blit(blurShader)
   }
 
