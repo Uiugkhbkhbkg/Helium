@@ -10,7 +10,7 @@ import arc.math.geom.Geometry
 import arc.math.geom.Rect
 import arc.math.geom.Vec2
 import arc.scene.Group
-import arc.struct.OrderedMap
+import arc.struct.ObjectSet
 import arc.struct.OrderedSet
 import arc.struct.Seq
 import arc.util.Time
@@ -19,6 +19,8 @@ import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
 import helium.He.config
 import helium.ui.fragments.entityinfo.Side.*
+import helium.util.MutablePair
+import helium.util.mto
 import mindustry.Vars
 import mindustry.gen.*
 import mindustry.gen.Unit
@@ -37,8 +39,8 @@ class EntityInfoFrag {
 
   private val displays = Seq<EntityInfoDisplay<Model<*>>>()
 
-  private val displayQueue = OrderedSet<EntityEntry>()
-  private val all = OrderedSet<EntityEntry>()
+  private val all = ObjectSet<EntityEntry>()
+  private val displayQueue = Seq<EntityEntry>()
 
   private val hovering = OrderedSet<EntityEntry>()
   private val currHov = OrderedSet<EntityEntry>()
@@ -197,16 +199,18 @@ class EntityInfoFrag {
       }
 
       e.display.forEach r@{ entry ->
-        val display = entry.key
-        val model = entry.value
+        val display = entry.first
+        val model = entry.second?:return@r
 
         if (!display.worldRender) return@r
 
         display.apply {
-          if ((hoveringOnly && !model.checkHovering(checkIsHovering(e))) || !model.shouldDisplay()) return@r
-          if (model.checkWorldClip(worldViewport) && model.shouldDisplay()) {
-            model.drawWorld(alpha*e.alpha)
-          }
+          if (
+            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
+            || !model.shouldDisplay()
+            || !model.checkWorldClip(worldViewport)
+          ) return@r
+          model.drawWorld(alpha*e.alpha)
         }
       }
     }
@@ -303,7 +307,7 @@ class EntityInfoFrag {
       }
     }
 
-    if (!displayQueue.isEmpty) displayQueue.orderedItems()
+    if (!displayQueue.isEmpty) displayQueue
       .sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(Core.input.mouseWorld()) }
   }
 
@@ -313,8 +317,8 @@ class EntityInfoFrag {
 
     displays.forEach { display ->
       if (display.valid(entity) && display.enabled()) {
-        entry.display.put(
-          display,
+        entry.display.add(
+          display mto
           if (display.hoveringOnly) null
           else {
             val model = (display as EntityInfoDisplay<*>).obtainModel(entity)
@@ -354,20 +358,25 @@ class EntityInfoFrag {
 
   @Suppress("UNCHECKED_CAST")
   private fun update(delta: Float) {
-    displayQueue.reversed().forEach { e -> e.display.forEach r@{ it.key.apply {
-      if (!it.value.checkHovering(checkIsHovering(e)) && hoveringOnly) return@r
-      if (it.value == null){
-        val model = obtainModel(e.entity)
-        if (this is InputEventChecker<*>){
-          this as InputEventChecker<InputCheckerModel<*>>
-          model as InputCheckerModel
-          model.element = model.buildListener().also { elem -> infoFill.addChild(elem) }
+    for (i in displayQueue.size - 1 downTo 0) {
+      val e = displayQueue[i]
+
+      e.display.forEach r@{
+        it.first.apply {
+          if (!it.second.checkHovering(checkIsHovering(e)) && hoveringOnly) return@r
+          if (it.second == null){
+            val model = obtainModel(e.entity)
+            if (this is InputEventChecker<*>){
+              this as InputEventChecker<InputCheckerModel<*>>
+              model as InputCheckerModel
+              model.element = model.buildListener().also { elem -> infoFill.addChild(elem) }
+            }
+            it.second = model
+          }
+          it.second!!.update(delta)
         }
-        e.display.put(it.key, model)
-        it.value = model
       }
-      it.value.update(delta)
-    } } }
+    }
   }
 
   private fun drawHUDLay() {
@@ -377,7 +386,9 @@ class EntityInfoFrag {
     val minSizeMul = 2
 
     Draw.sort(true)
-    displayQueue.reversed().forEach { e ->
+    for (i in displayQueue.size - 1 downTo 0) {
+      val e = displayQueue[i]
+
       var offsetLeft = 0f
       var offsetRight = 0f
       var offsetTop = 0f
@@ -396,9 +407,9 @@ class EntityInfoFrag {
 
       val a = e.alpha*alpha
       e.display.forEach f@{ entry ->
-        val display = entry.key
+        val display = entry.first
         if (!display.screenRender) return@f
-        val model = entry.value?: return@f
+        val model = entry.second?: return@f
 
         display.apply {
           if (
@@ -422,8 +433,8 @@ class EntityInfoFrag {
       val sizeOff = Core.camera.project(e.size, 0f).x - sizeOrig
 
       e.display.forEach f@{ entry ->
-        val display = entry.key
-        val model = entry.value
+        val display = entry.first
+        val model = entry.second?: return@f
 
         val dir = if(display.layoutSide == CENTER) Tmp.p1.set(0, 0) else Geometry.d4(display.layoutSide.dir)
         val offset = Tmp.v1.set(sizeOff*dir.x, sizeOff*dir.y)
@@ -504,19 +515,22 @@ class EntityEntry : Poolable {
   var showing = false
   var isValid = false
 
-  val display = OrderedMap<EntityInfoDisplay<Model<*>>, Model<*>>()
+  val display = Seq<MutablePair<EntityInfoDisplay<Model<*>>, Model<*>?>>()
 
-  val size: Float get() = entity.let {
-    when (it) {
-      is Hitboxc -> it.hitSize()/1.44f
-      is Building -> it.block.size*Vars.tilesize/2f
-      else -> 10f
-    }
-  }
+  var size: Float = -1f
+    get() = if (field < 0) entity.let {
+      field = when (it) {
+        is Hitboxc -> it.hitSize()/1.44f
+        is Building -> it.block.size*Vars.tilesize/2f
+        else -> 10f
+      }
+      field
+    } else field
 
   override fun reset() {
-    display.values().forEach {
-      if (it != null) {
+    size = -1f
+    display.forEach { e ->
+      e.second?.also {
         if (it is InputCheckerModel) it.element.remove()
         Pools.free(it)
       }
@@ -534,3 +548,4 @@ class EntityEntry : Poolable {
     return entity.hashCode()
   }
 }
+

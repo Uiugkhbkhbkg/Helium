@@ -144,6 +144,7 @@ tasks {
 
   register("deploy", Jar::class) {
     dependsOn("jarAndroid")
+    archiveFileName = "${project.name}.jar"
 
     from (
       zipTree("${buildDir}/libs/${project.name}-desktop.jar"),
@@ -154,7 +155,7 @@ tasks {
       if (!modOutputDir.isNullOrEmpty()) {
         copy {
           into("$modOutputDir/")
-          from("${buildDir}/libs/${project.name}-${version}.jar")
+          from("${buildDir}/libs/${project.name}.jar")
         }
       }
     }
