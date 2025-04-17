@@ -22,7 +22,7 @@ class EntityRangeExtractor {
   private var capturing = false
 
   var stroke = 2f
-  var alpha = 0.1f
+  var alpha = 0.075f
 
   private lateinit var extractShader: Shader
 

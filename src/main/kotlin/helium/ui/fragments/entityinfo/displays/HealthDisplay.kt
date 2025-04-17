@@ -4,6 +4,7 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Font
 import arc.graphics.g2d.FontCache
+import arc.graphics.g2d.GlyphLayout
 import arc.math.Mat
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
@@ -199,19 +200,30 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     val health = entity.health()
     val shield = shieldEnt?.shield()?: 0f
-    if (scale != lastScale || health != lastHealth || (shield != lastShield)){
-      detailBuff.apply {
-        clear()
-        append("\uE813 ")
-        append(Mathf.round(health))
-        append("/")
-        append(Mathf.round(entity.maxHealth()))
-        if (shield > 0) {
-          append(" - ")
-          append("\uE84D ")
-          append(UI.formatAmount(Mathf.round(shield).toLong()))
+    val scaleModified = !Mathf.equal(lastScale, scale, 0.001f)
+
+    if (scaleModified || health != lastHealth || shield != lastShield){
+      if (health != lastHealth || shield != lastShield) {
+        detailBuff.apply {
+          clear()
+          append("\uE813 ")
+          append(Mathf.round(health))
+          append("/")
+          append(Mathf.round(entity.maxHealth()))
+          if (shield > 0) {
+            append(" - ")
+            append("\uE84D ")
+            append(UI.formatAmount(Mathf.round(shield).toLong()))
+          }
+        }
+        detailWidth = GlyphLayout.obtain().let {
+          it.setText(style.font, detailBuff)
+          val res = it.width
+          it.free()
+          res*style.fontScl
         }
       }
+
       detailCache.clear()
       detailCache.color = c1.set(Color.white).a(alpha)
       style.font.apply {
@@ -219,14 +231,14 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
         val pint = usesIntegerPositions()
         getData().setScale(scale*style.fontScl)
         setUseIntegerPositions(false)
-        detailWidth = detailCache.setText(
+        detailCache.setText(
           detailBuff,
           style.texOffX*Scl.scl(scale),
           style.texOffY*Scl.scl(scale) + style.font.capHeight,
           0f,
           Align.topLeft,
           false
-        ).width
+        )
         getData().setScale(pscale)
         setUseIntegerPositions(pint)
       }
@@ -237,9 +249,18 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     val n = Mathf.ceil((shieldEnt?.shield()?:0f)/entity.maxHealth())
 
-    if (scale != lastScale || lastN != n) {
-      shieldBuff.clear()
-      if (n > 1) shieldBuff.append("x").append(n)
+    if (scaleModified || lastN != n) {
+      if (lastN != n) {
+        shieldBuff.clear()
+        if (n > 1) shieldBuff.append("x").append(n)
+
+        shieldWidth = GlyphLayout.obtain().let {
+          it.setText(style.font, shieldBuff)
+          val res = it.width
+          it.free()
+          res*style.shieldFontScl
+        }
+      }
 
       val fontColor =
         if (n >= 10000) Color.crimson
@@ -254,14 +275,14 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
         val pint = usesIntegerPositions()
         getData().setScale(scale*style.shieldFontScl)
         setUseIntegerPositions(false)
-        shieldWidth = shieldCache.setText(
+        shieldCache.setText(
           shieldBuff,
           drawWidth - style.shieldsOffX*Scl.scl(scale),
           style.shieldsOffY*Scl.scl(scale) + style.font.capHeight,
           0f,
           Align.topRight,
           false
-        ).width
+        )
         getData().setScale(pscale)
         setUseIntegerPositions(pint)
       }

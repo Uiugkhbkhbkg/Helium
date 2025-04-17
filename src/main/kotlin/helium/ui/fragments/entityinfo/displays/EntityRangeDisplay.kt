@@ -35,6 +35,7 @@ class EntityRangeModel: Model<Ranged> {
 
   var building: Building? = null
   var vis = 0f
+  var range = 0f
 
   var hovering = false
   var isUnit = false
@@ -71,17 +72,17 @@ class EntityRangeModel: Model<Ranged> {
     layerID = when{
       isUnit || isTurret -> {
         color.set(ent.team().color)
-        alpha = 0.125f
+        alpha = 0.1f
         ent.team().id
       }
       isRepair -> {
         color.set(Pal.heal)
-        alpha = 0.1f
+        alpha = 0.075f
         260
       }
       isOverdrive -> {
         color.set(0.731f, 0.522f, 0.425f, 1f)
-        alpha = 0.1f
+        alpha = 0.075f
         261
       }
       else -> 300
@@ -117,14 +118,15 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     }
   }
 
-  override fun EntityRangeModel.shouldDisplay() =
-    vis > 0
-    && !He.config.hiddenTeams.contains(entity.team().id)
+  override fun EntityRangeModel.shouldDisplay() = vis > 0 && He.config.let {
+    !it.hiddenTeams.contains(entity.team().id)
     && (
-      ((isUnit || isTurret) && He.config.showAttackRange)
-      || (isRepair && He.config.showHealRange)
-      || (isOverdrive && He.config.showOverdriveRange)
+      ((isUnit || isTurret) && it.showAttackRange)
+      || (isRepair && it.showHealRange)
+      || (isOverdrive && it.showOverdriveRange)
     )
+  }
+
 
   override val worldRender: Boolean get() = true
   override val screenRender: Boolean get() = false
@@ -134,7 +136,7 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     it.showAttackRange || it.showHealRange || it.showOverdriveRange
   }
 
-  override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (entity.range()*2).let { clipSize ->
+  override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (range*2).let { clipSize ->
     worldViewport.overlaps(
       entity.x - clipSize/2, entity.y - clipSize/2,
       clipSize, clipSize
@@ -148,7 +150,7 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
 
   override fun EntityRangeModel.draw(alpha: Float) {
     val a = (alpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
-    val radius = entity.range()*a
+    val radius = range*a
     val layer = Layer.light - 3 + layerOffset
     val size = entity.let {
       when(it) {
@@ -246,6 +248,7 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
   }
 
   override fun EntityRangeModel.update(delta: Float) {
+    range = entity.range()
     val to = building?.let {
       if (it.status() != BlockStatus.noInput) 1f else 0f
     }?:1f

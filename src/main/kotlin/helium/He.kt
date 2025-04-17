@@ -123,7 +123,7 @@ object He {
     conf.addConfig(
       "basic", Icon.settings,
       ConfigSepLine(
-        "basic",
+        "backBlur",
         Core.bundle["settings.basic.backBlur"],
         Pal.accent,
         Pal.accentBack
@@ -183,6 +183,17 @@ object He {
         "showOverdriveRange",
         config::showOverdriveRange
       ),
+    )
+    conf.addConfig(
+      "debug", HeAssets.program,
+      ConfigSepLine(
+        "logging",
+        Core.bundle["settings.debug.logging"],
+      ),
+      ConfigCheck(
+        "loadingInfo",
+        config::loadInfo
+      )
     )
   }
 }
