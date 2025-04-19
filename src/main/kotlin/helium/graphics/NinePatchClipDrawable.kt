@@ -13,18 +13,17 @@ open class NinePatchClipDrawable: BaseClipDrawable {
   companion object {
     private val tmpColor = Color()
 
-    private val clazz = NinePatch::class
-    private val NinePatch.idxField by clazz.accessInt("idx")
-    private val NinePatch.botLeftField by clazz.accessInt("bottomLeft")
-    private val NinePatch.botCenterField by clazz.accessInt("bottomCenter")
-    private val NinePatch.botRightField by clazz.accessInt("bottomRight")
-    private val NinePatch.midLeftField by clazz.accessInt("middleLeft")
-    private val NinePatch.midCenterField by clazz.accessInt("middleCenter")
-    private val NinePatch.midRightField by clazz.accessInt("middleRight")
-    private val NinePatch.topLeftField by clazz.accessInt("topLeft")
-    private val NinePatch.topCenterField by clazz.accessInt("topCenter")
-    private val NinePatch.topRightField by clazz.accessInt("topRight")
-    private val NinePatch.verticesField by accessField<NinePatch, FloatArray>("vertices")
+    private val NinePatch.idxField by accessInt("idx")
+    private val NinePatch.botLeftField by accessInt("bottomLeft")
+    private val NinePatch.botCenterField by accessInt("bottomCenter")
+    private val NinePatch.botRightField by accessInt("bottomRight")
+    private val NinePatch.midLeftField by accessInt("middleLeft")
+    private val NinePatch.midCenterField by accessInt("middleCenter")
+    private val NinePatch.midRightField by accessInt("middleRight")
+    private val NinePatch.topLeftField by accessInt("topLeft")
+    private val NinePatch.topCenterField by accessInt("topCenter")
+    private val NinePatch.topRightField by accessInt("topRight")
+    private val NinePatch.verticesField: FloatArray by accessField("vertices")
   }
 
   protected lateinit var ninePatch: NinePatch

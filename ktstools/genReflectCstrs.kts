@@ -13,10 +13,10 @@ for(n in 0..22){
 
   val res =
 """
-class MethodInvoker$n<O, ${typeArgs}R>(private val method: Method)
-  : (O, ${if (n > 0) typeArgs.substring(0, typeArgs.length - 2) else typeArgs}) -> R {
-  override fun invoke(self: O, ${if (n > 0) argsDecl.substring(0, argsDecl.length - 2) else ""})
-    = method.invoke(self, ${if (n > 0) args.substring(0, args.length - 2) else ""}) as R
+class ConstructorInvoker$n<${typeArgs}O>(private val constructor: Constructor<O>)
+  : (${if (n > 0) typeArgs.substring(0, typeArgs.length - 2) else typeArgs}) -> O {
+  override fun invoke(${if (n > 0) argsDecl.substring(0, argsDecl.length - 2) else ""})
+      = constructor.newInstance(${if (n > 0) args.substring(0, args.length - 2) else ""})
 }"""
 
   builder.append(res)

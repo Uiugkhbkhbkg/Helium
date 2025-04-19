@@ -51,6 +51,9 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showOverdriveRange = true
 
+  @ConfigItem var enableBetterPlacement = true
+  @ConfigItem var doubleFastSlots = true
+
   fun load() {
     if (!configFile.exists()) {
       internalConfigFile.copyTo(configFile)

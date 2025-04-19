@@ -123,7 +123,7 @@ class EntityInfoFrag {
       }
     }
 
-    parent.addChild(infoFill)
+    parent.addChildAt(0, infoFill)
     infoFill.fillParent = true
   }
 

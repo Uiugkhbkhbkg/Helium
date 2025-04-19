@@ -15,16 +15,26 @@ object HeAssets {
   lateinit var program: Drawable
 
   lateinit var transparent: Drawable
+  lateinit var grayUI: Drawable
   lateinit var grayUIAlpha: Drawable
+  lateinit var darkGrayUI: Drawable
+  lateinit var darkGrayUIAlpha: Drawable
   lateinit var padGrayUIAlpha: Drawable
+  lateinit var slotsBack: Drawable
 
   fun load(){
     heIcon = Helium.getDrawable("helium")
     program = Helium.getDrawable("program")
 
-    transparent = (Tex.whiteui as TextureRegionDrawable).tint(Color.clear)
-    grayUIAlpha = (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))
-    padGrayUIAlpha = ((Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))).also {
+    slotsBack = Helium.getDrawable("slots-back")
+
+    val white = Tex.whiteui as TextureRegionDrawable
+    transparent = white.tint(Color.clear)
+    grayUI = white.tint(Pal.darkerGray)
+    grayUIAlpha = white.tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))
+    darkGrayUI = white.tint(Pal.darkestGray)
+    darkGrayUIAlpha = white.tint(Tmp.c1.set(Pal.darkestGray).a(0.7f))
+    padGrayUIAlpha = white.tint(Tmp.c1.set(Pal.darkerGray).a(0.7f)).also {
       it.leftWidth = 8f
       it.rightWidth = 8f
       it.topHeight = 8f

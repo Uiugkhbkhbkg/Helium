@@ -13,12 +13,10 @@ for(n in 0..20){
 
   val res =
 """
-inline fun <reified O: Any, ${typeArgs}reified R> accessMethod$n(name: String) =
-MethodInvoker$n<O, ${typeArgsUse}R>(O::class.java.getDeclaredMethod(
-  name,
+inline fun <reified O: Any, ${if (n > 0) typeArgs.substring(0, typeArgs.length - 2) else typeArgs}> accessConstructor$n() =
+ConstructorInvoker$n<${typeArgsUse}O>(O::class.java.getConstructor(
   ${if (n > 0) types.substring(0, types.length - if (n % 5 == 0) 5 else 2) else types}
 ).also {
-  checkReturnType(it, R::class.java)
   it.isAccessible = true
 })"""
 
