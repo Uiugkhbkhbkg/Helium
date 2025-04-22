@@ -1,5 +1,6 @@
 package helium.ui.fragments.entityinfo.displays
 
+import arc.Core
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Lines
@@ -7,12 +8,14 @@ import arc.math.Interp
 import arc.math.Mathf
 import arc.math.geom.Geometry
 import arc.math.geom.Rect
+import arc.scene.ui.layout.Scl
 import arc.struct.Bits
+import arc.util.Align
 import arc.util.Time
 import arc.util.Tmp
 import helium.He
-import helium.He.entityRangeRenderer
 import helium.graphics.DrawUtils
+import helium.graphics.HeShaders.entityRangeRenderer
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
 import mindustry.game.Team
@@ -20,6 +23,7 @@ import mindustry.gen.*
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.logic.Ranged
+import mindustry.ui.Fonts
 import mindustry.world.blocks.defense.ForceProjector.ForceBuild
 import mindustry.world.blocks.defense.MendProjector.MendBuild
 import mindustry.world.blocks.defense.OverdriveProjector.OverdriveBuild
@@ -32,6 +36,7 @@ import mindustry.world.meta.BlockStatus
 
 class EntityRangeModel: Model<Ranged> {
   override lateinit var entity: Ranged
+  override lateinit var disabledTeam: Bits
 
   var building: Building? = null
   var vis = 0f
@@ -119,21 +124,33 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
   }
 
   override fun EntityRangeModel.shouldDisplay() = vis > 0 && He.config.let {
-    !it.hiddenTeams.contains(entity.team().id)
-    && (
-      ((isUnit || isTurret) && it.showAttackRange)
-      || (isRepair && it.showHealRange)
-      || (isOverdrive && it.showOverdriveRange)
-    )
+    ((isUnit || isTurret) && it.showAttackRange)
+    || (isRepair && it.showHealRange)
+    || (isOverdrive && it.showOverdriveRange)
   }
-
 
   override val worldRender: Boolean get() = true
   override val screenRender: Boolean get() = false
 
   override fun valid(entity: Posc): Boolean = entity is Ranged && entity !is ForceBuild
   override fun enabled() = He.config.let {
-    it.showAttackRange || it.showHealRange || it.showOverdriveRange
+    it.enableRangeDisplay && (it.showAttackRange || it.showHealRange || it.showOverdriveRange)
+  }
+
+  override fun drawConfig(centX: Float, centerY: Float) {
+    val size = Scl.scl(64f)
+    val off = Scl.scl(16f)
+    Icon.zoom.draw(
+      centX - size/2f, centerY - size/2f + off,
+      size, size,
+    )
+
+    Fonts.outline.draw(
+      Core.bundle["infos.entityRange"],
+      centX, centerY - off,
+      Color.white, 0.9f, true,
+      Align.center
+    )
   }
 
   override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (range*2).let { clipSize ->
@@ -179,7 +196,7 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     val inner = Interp.pow3.apply(r)
     val outer = Interp.pow3Out.apply(r)
 
-    DrawUtils.innerLightCircle(
+    DrawUtils.innerCircle(
       entity.x, entity.y,
       inner*radius, outer*radius,
       Tmp.c1.set(Color.white).a(0f), Color.white, 1

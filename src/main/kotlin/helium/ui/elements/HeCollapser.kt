@@ -1,4 +1,4 @@
-package arc.scene.ui.layout
+package helium.ui.elements
 
 import arc.func.Boolp
 import arc.func.Cons
@@ -7,15 +7,29 @@ import arc.math.Interp
 import arc.scene.actions.TemporalAction
 import arc.scene.event.Touchable
 import arc.scene.style.Drawable
+import arc.scene.ui.layout.Table
+import arc.scene.ui.layout.WidgetGroup
 import arc.util.ArcRuntimeException
 
-class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() {
+class HeCollapser(
+  private var collTable: Table,
+  var collapse: Boolean,
+  private val collX: Boolean,
+  private val collY: Boolean
+) : WidgetGroup() {
   var collapsedFunc: Boolp? = null
   private val collapseAction = CollapseAction()
   var actionRunning = false
   var currentWidth = 0f
+  var currentHeight = 0f
 
-  constructor(collapsed: Boolean, background: Drawable? = null, cons: Cons<Table>) : this(Table(background), collapsed) {
+  constructor(
+    collX: Boolean,
+    collY: Boolean,
+    collapsed: Boolean = false,
+    background: Drawable? = null,
+    cons: Cons<Table>
+  ) : this(Table(background), collapsed, collX, collY) {
     cons.get(collTable)
   }
 
@@ -26,13 +40,13 @@ class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() 
     addChild(collTable)
   }
 
-  fun setDuration(seconds: Float, interp: Interp = Interp.linear): HorCollapser {
+  fun setDuration(seconds: Float, interp: Interp = Interp.linear): HeCollapser {
     this.collapseAction.duration = seconds
     this.collapseAction.interpolation = interp
     return this
   }
 
-  fun setCollapsed(collapsed: Boolp): HorCollapser {
+  fun setCollapsed(collapsed: Boolp): HeCollapser {
     this.collapsedFunc = collapsed
     return this
   }
@@ -57,9 +71,9 @@ class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() 
   }
 
   override fun draw() {
-    if (currentWidth > 1) {
+    if (currentWidth > 1 && currentHeight > 1) {
       Draw.flush()
-      if (clipBegin(x, y, currentWidth, height)) {
+      if (clipBegin(x, y, currentWidth, currentHeight)) {
         super.draw()
         Draw.flush()
         clipEnd()
@@ -87,11 +101,14 @@ class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() 
     collTable.setBounds(0f, 0f, getWidth(), getHeight())
 
     if (!actionRunning) {
-      currentWidth = if (collapse) 0f else collTable.prefWidth
+      currentWidth = if (collX) if (collapse) 0f else collTable.prefWidth else getWidth()
+      currentHeight = if (collY) if (collapse) 0f else collTable.prefHeight else getHeight()
     }
   }
 
   override fun getPrefWidth(): Float {
+    if (!collX) return collTable.prefWidth
+
     if (!actionRunning) {
       return if (collapse) 0f
       else collTable.prefWidth
@@ -101,7 +118,14 @@ class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() 
   }
 
   override fun getPrefHeight(): Float {
-    return collTable.prefHeight
+    if (!collY) return collTable.prefHeight
+
+    if (!actionRunning) {
+      return if (collapse) 0f
+      else collTable.prefHeight
+    }
+
+    return currentHeight
   }
 
   fun setTable(table: Table) {
@@ -130,13 +154,16 @@ class HorCollapser(var collTable: Table, var collapse: Boolean) : WidgetGroup() 
       actionRunning = true
     }
     override fun update(percent: Float) {
-      currentWidth =
-        if (collapse) {
-          (1 - percent)*collTable.prefWidth
-        }
-        else {
-          percent*collTable.prefWidth
-        }
+      if (collX) {
+        currentWidth =
+          if (collapse) (1 - percent)*collTable.prefWidth
+          else percent*collTable.prefWidth
+      }
+      if (collY) {
+        currentHeight =
+          if (collapse) (1 - percent)*collTable.prefHeight
+          else percent*collTable.prefHeight
+      }
 
       invalidateHierarchy()
     }

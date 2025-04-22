@@ -2,10 +2,15 @@ package helium
 
 import arc.Core
 import arc.Events
+import arc.Settings
 import arc.files.Fi
+import arc.func.Boolf
+import arc.scene.Element
+import arc.scene.event.SceneEvent
 import arc.scene.ui.layout.Table
+import arc.util.Log
+import arc.util.Strings
 import helium.graphics.HeShaders
-import helium.graphics.g2d.EntityRangeExtractor
 import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.dialogs.ConfigCheck
@@ -45,8 +50,15 @@ object He {
   val modDirectory: Fi = Core.settings.dataDirectory.child("mods")
   /**模组配置文件夹 */
   val configDirectory: Fi = modDirectory.child("config").child(INTERNAL_NAME)
+  /**模组数据文件目录*/
+  val dataDirectory: Fi = modDirectory.child("data").child(INTERNAL_NAME)
+  /**模组持久全局变量存储文件 */
+  val globalVars: Fi = dataDirectory.child("global_vars.bin")
+  /**模组持久全局变量备份文件 */
+  val globalVarsBackup: Fi = dataDirectory.child("global_vars.bin.bak")
 
   lateinit var config: HeConfig
+  lateinit var global: Settings
 
   lateinit var placement: HePlacementFrag
   lateinit var entityInfo: EntityInfoFrag
@@ -55,9 +67,20 @@ object He {
   lateinit var detailsDisplay: DetailsDisplay
   lateinit var entityRangeDisplay: EntityRangeDisplay
 
-  lateinit var entityRangeRenderer: EntityRangeExtractor
-
   lateinit var configDialog: ModConfigDialog
+
+  private fun update() {
+    global.autosave()
+
+    HeStyles.uiBlur.blurScl = config.blurScl
+    HeStyles.uiBlur.blurSpace = config.blurSpace
+    Styles.defaultDialog.stageBackground = if (config.enableBlur) HeStyles.BLUR_BACK else Styles.black9
+  }
+
+  private fun drawWorld() {
+    EntityRangeDisplay.resetMark()
+    entityInfo.drawWorld()
+  }
 
   fun init() {
     config = HeConfig(
@@ -66,17 +89,20 @@ object He {
     )
     config.load()
 
+    global = genGlobal()
+    global.load()
+
     HeAssets.load()
     HeShaders.load()
     HeStyles.load()
 
     placement = HePlacementFrag()
+    setupTools(placement)
     placement.build(Vars.ui.hudGroup)
-    entityInfo = EntityInfoFrag()
-    entityInfo.build(Vars.ui.hudGroup)
-    setupDisplays(entityInfo)
 
-    entityRangeRenderer = EntityRangeExtractor()
+    entityInfo = EntityInfoFrag()
+    setupDisplays(entityInfo)
+    entityInfo.build(Vars.ui.hudGroup)
 
     configDialog = ModConfigDialog()
     setupSettings(configDialog)
@@ -95,22 +121,75 @@ object He {
     }
   }
 
+  private fun genGlobal() = object : Settings() {
+    override fun getSettingsFile(): Fi {
+      return globalVars
+    }
+
+    override fun getBackupFolder(): Fi {
+      return He.dataDirectory.child("global_backups")
+    }
+
+    override fun getBackupSettingsFile(): Fi {
+      return globalVarsBackup
+    }
+
+    @Synchronized
+    override fun load() {
+      try {
+        loadValues()
+      } catch (error: Throwable) {
+        Log.err("Error in load: " + Strings.getStackTrace(error))
+        if (errorHandler != null) {
+          if (!hasErrored) errorHandler.get(error)
+        }
+        else {
+          throw error
+        }
+        hasErrored = true
+      }
+      loaded = true
+    }
+
+    @Synchronized
+    override fun forceSave() {
+      if (!loaded) return
+      try {
+        saveValues()
+      } catch (error: Throwable) {
+        Log.err("Error in forceSave to " + settingsFile + ":\n" + Strings.getStackTrace(error))
+        if (errorHandler != null) {
+          if (!hasErrored) errorHandler.get(error)
+        }
+        else {
+          throw error
+        }
+        hasErrored = true
+      }
+      modified = false
+    }
+  }.also {
+    it.setAutosave(true)
+    it.setDataDirectory(dataDirectory)
+  }
+
+  private fun setupTools(frag: HePlacementFrag) {
+    frag.addTool(
+      "controlEntityInfoShow",
+      Icon.effect,
+      { entityInfo.controlling || Core.input.keyDown(config.entityInfoHotKey) },
+    ){ entityInfo.controlling = !entityInfo.controlling }
+    frag.addTool(
+      "entityInfoSwitches",
+      Icon.settings
+    ){ entityInfo.toggleSwitchConfig() }
+  }
+
   private fun setupGlobalListeners() {
     Events.run(EventType.Trigger.update) { update() }
     Events.run(EventType.Trigger.draw) { drawWorld() }
 
     Events.on(EventType.ResetEvent::class.java) { entityInfo.reset() }
-  }
-
-  private fun update() {
-    HeStyles.uiBlur.blurScl = config.blurScl
-    HeStyles.uiBlur.blurSpace = config.blurSpace
-    Styles.defaultDialog.stageBackground = if (config.enableBlur) HeStyles.BLUR_BACK else Styles.black9
-  }
-
-  private fun drawWorld() {
-    EntityRangeDisplay.resetMark()
-    entityInfo.drawWorld()
   }
 
   private fun setupDisplays(infos: EntityInfoFrag) {
@@ -165,6 +244,10 @@ object He {
         "enableUnitStatusDisplay",
         config::enableUnitStatusDisplay
       ),
+      ConfigCheck(
+        "enableRangeDisplay",
+        config::enableRangeDisplay
+      ),
       ConfigSlider(
         "entityInfoScale",
         config::entityInfoScale,
@@ -174,18 +257,6 @@ object He {
         "entityInfoAlpha",
         config::entityInfoAlpha,
         0.4f, 1f, 0.05f
-      ),
-      ConfigCheck(
-        "showAttackRange",
-        config::showAttackRange
-      ),
-      ConfigCheck(
-        "showHealRange",
-        config::showHealRange
-      ),
-      ConfigCheck(
-        "showOverdriveRange",
-        config::showOverdriveRange
       ),
     )
     conf.addConfig(
@@ -199,5 +270,19 @@ object He {
         config::loadInfo
       )
     )
+  }
+}
+
+fun Element.addEventBlocker(
+  capture: Boolean = false,
+  isCancel: Boolean = false,
+  filter: Boolf<SceneEvent> = Boolf{ true }
+){
+  (this::addCaptureListener.takeIf{ capture }?: this::addListener){ event ->
+    if (event != null && filter.get(event)) {
+      if (isCancel) event.cancel()
+      else event.stop()
+    }
+    false
   }
 }

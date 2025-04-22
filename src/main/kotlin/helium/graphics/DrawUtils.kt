@@ -11,6 +11,7 @@ import arc.graphics.gl.Shader
 import arc.math.Mathf
 import arc.math.geom.Vec2
 
+@Suppress("DuplicatedCode")
 object DrawUtils {
   private val circleOffset24 = prepareCircleOffset(24)
   private val circleOffset36 = prepareCircleOffset(36)
@@ -74,6 +75,7 @@ object DrawUtils {
   private val v1 = Vec2()
   private val v2 = Vec2()
   private val v3 = Vec2()
+  private val v4 = Vec2()
 
   fun fillCircle(x: Float, y: Float, radius: Float, level: Int = 2){
     val color = Draw.getColorPacked()
@@ -111,7 +113,7 @@ object DrawUtils {
     Draw.vert(Core.atlas.white().texture, vertices, 0, vertices.size);
   }
 
-  fun innerLightCircle(x: Float, y: Float, innerRadius: Float, radius: Float, innerColor: Color, color: Color, level: Int = 2){
+  fun innerCircle(x: Float, y: Float, innerRadius: Float, radius: Float, innerColor: Color, color: Color, level: Int = 2){
     val c1 = innerColor.toFloatBits()
     val c2 = color.toFloatBits()
     val (offset, vertices) = getVerts(level)
@@ -222,6 +224,8 @@ object DrawUtils {
     val step = 360f/sides
     val s = (angle/360*sides).toInt()
 
+    val rem = angle - s*step
+
     for (i in 0 until s) {
       val offX1 = Mathf.cosDeg(rotate + i*step)
       val offY1 = Mathf.sinDeg(rotate + i*step)
@@ -236,6 +240,133 @@ object DrawUtils {
         v1.x, v1.y,
         v2.x, v2.y,
         x, y
+      )
+    }
+
+    if (rem > 0) {
+      val offX1 = Mathf.cosDeg(rotate + s*step)
+      val offY1 = Mathf.sinDeg(rotate + s*step)
+      val offX2 = Mathf.cosDeg(rotate + angle)
+      val offY2 = Mathf.sinDeg(rotate + angle)
+
+      v1.set(offX1, offY1).scl(radius).add(x, y)
+      v2.set(offX2, offY2).scl(radius).add(x, y)
+
+      Fill.quad(
+        x, y,
+        v1.x, v1.y,
+        v2.x, v2.y,
+        x, y
+      )
+    }
+  }
+
+  fun circleStrip(
+    x: Float, y: Float, innerRadius: Float, radius: Float,
+    angle: Float, rotate: Float = 0f,
+    innerColor: Color = Draw.getColor(),
+    outerColor: Color = innerColor,
+    sides: Int = 72
+  ){
+    val step = 360f/sides
+    val s = (angle/360*sides).toInt()
+    val innerC = innerColor.toFloatBits()
+    val outerC = outerColor.toFloatBits()
+
+    val rem = angle - s*step
+
+    for (i in 0 until s) {
+      val offX1 = Mathf.cosDeg(rotate + i*step)
+      val offY1 = Mathf.sinDeg(rotate + i*step)
+      val offX2 = Mathf.cosDeg(rotate + (i + 1)*step)
+      val offY2 = Mathf.sinDeg(rotate + (i + 1)*step)
+
+      val inner1 = v1.set(offX1, offY1).scl(innerRadius).add(x, y)
+      val inner2 = v2.set(offX2, offY2).scl(innerRadius).add(x, y)
+      val out1 = v3.set(offX1, offY1).scl(radius).add(x, y)
+      val out2 = v4.set(offX2, offY2).scl(radius).add(x, y)
+
+      Fill.quad(
+        inner1.x, inner1.y, innerC,
+        inner2.x, inner2.y, innerC,
+        out2.x, out2.y, outerC,
+        out1.x, out1.y, outerC,
+      )
+    }
+
+    if (rem > 0) {
+      val offX1 = Mathf.cosDeg(rotate + s*step)
+      val offY1 = Mathf.sinDeg(rotate + s*step)
+      val offX2 = Mathf.cosDeg(rotate + angle)
+      val offY2 = Mathf.sinDeg(rotate + angle)
+
+      val inner1 = v1.set(offX1, offY1).scl(innerRadius).add(x, y)
+      val inner2 = v2.set(offX2, offY2).scl(innerRadius).add(x, y)
+      val out1 = v3.set(offX1, offY1).scl(radius).add(x, y)
+      val out2 = v4.set(offX2, offY2).scl(radius).add(x, y)
+
+      Fill.quad(
+        inner1.x, inner1.y, innerC,
+        inner2.x, inner2.y, innerC,
+        out2.x, out2.y, outerC,
+        out1.x, out1.y, outerC,
+      )
+    }
+  }
+
+  fun circleFrame(
+    x: Float, y: Float, innerRadius: Float, radius: Float,
+    angle: Float, rotate: Float = 0f, sides: Int = 72
+  ){
+    val offX1 = Mathf.cosDeg(rotate)
+    val offY1 = Mathf.sinDeg(rotate)
+    val offX2 = Mathf.cosDeg(rotate + angle)
+    val offY2 = Mathf.sinDeg(rotate + angle)
+
+    val inner1 = v1.set(offX1, offY1).scl(innerRadius).add(x, y)
+    val inner2 = v2.set(offX2, offY2).scl(innerRadius).add(x, y)
+    val out1 =  v3.set(offX1, offY1).scl(radius).add(x, y)
+    val out2 = v4.set(offX2, offY2).scl(radius).add(x, y)
+
+    Lines.line(
+      inner1.x, inner1.y,
+      out1.x, out1.y,
+    )
+    Lines.line(
+      inner2.x, inner2.y,
+      out2.x, out2.y,
+    )
+    Lines.arc(
+      x, y, innerRadius, angle/360f, rotate, sides
+    )
+    Lines.arc(
+      x, y, radius, angle/360f, rotate, sides
+    )
+  }
+
+  fun drawLinesRadio(
+    centerX: Float, centerY: Float,
+    innerRadius: Float, radius: Float,
+    lines: Int, rotate: Float = 0f,
+    totalDeg: Float = 360f, cap: Boolean = false
+  ){
+    val angleStep = totalDeg/lines
+
+    for (i in 0 until if (cap) lines + 1 else lines) {
+      val angle = i * angleStep + rotate
+
+      val cos = Mathf.cosDeg(angle)
+      val sin = Mathf.sinDeg(angle)
+      val innerOffX = innerRadius * cos
+      val innerOffY = innerRadius * sin
+      val outerOffX = radius * cos
+      val outerOffY = radius * sin
+
+      Lines.line(
+        centerX + innerOffX,
+        centerY + innerOffY,
+        centerX + outerOffX,
+        centerY + outerOffY,
       )
     }
   }

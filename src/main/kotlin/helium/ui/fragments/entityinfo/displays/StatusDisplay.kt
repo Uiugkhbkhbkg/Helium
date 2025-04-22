@@ -5,6 +5,7 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
+import arc.struct.Bits
 import arc.struct.Seq
 import arc.util.Align
 import arc.util.Tmp
@@ -13,6 +14,7 @@ import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
 import mindustry.Vars
+import mindustry.gen.Icon
 import mindustry.gen.Posc
 import mindustry.gen.Statusc
 import mindustry.graphics.Pal
@@ -25,6 +27,7 @@ private val iconPadding = Scl.scl(4f)
 
 class StatusModel: Model<Statusc>{
   override lateinit var entity: Statusc
+  override lateinit var disabledTeam: Bits
 
   var singleWidth = 1f
   val statusList = Seq<StatusEffect>()
@@ -52,6 +55,22 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
 
   override fun StatusModel.shouldDisplay(): Boolean {
     return statusList.any()
+  }
+
+  override fun drawConfig(centX: Float, centerY: Float) {
+    val size = Scl.scl(64f)
+    val off = Scl.scl(16f)
+    Icon.effect.draw(
+      centX - size/2f, centerY - size/2f + off,
+      size, size,
+    )
+
+    Fonts.outline.draw(
+      Core.bundle["infos.statusDisplay"],
+      centX, centerY - off,
+      Color.white, 0.9f, true,
+      Align.center
+    )
   }
 
   override fun StatusModel.realHeight(prefSize: Float): Float{

@@ -3,6 +3,7 @@ package helium.ui.fragments.entityinfo
 import arc.func.Prov
 import arc.math.geom.Rect
 import arc.scene.Element
+import arc.struct.Bits
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
 import mindustry.gen.Building
@@ -28,6 +29,8 @@ abstract class EntityInfoDisplay<M: Model<*>>(
 
   abstract fun valid(entity: Posc): Boolean
   abstract fun enabled(): Boolean
+
+  abstract fun drawConfig(centX: Float, centerY: Float)
 
   open fun M?.checkHovering(isHovered: Boolean) = isHovered
   open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {
@@ -55,6 +58,7 @@ abstract class EntityInfoDisplay<M: Model<*>>(
 }
 
 interface Model<E: Any>: Poolable{
+  var disabledTeam: Bits
   var entity: E
   fun setup(ent: E)
 }
@@ -69,6 +73,7 @@ enum class Side(val dir: Int){
 
 abstract class NoneModelDisplay<T: Posc>: EntityInfoDisplay<Model<T>>(modelProv = Prov {
   object : Model<T> {
+    override lateinit var disabledTeam: Bits
     override lateinit var entity: T
     override fun setup(ent: T) {}
     override fun reset() {}

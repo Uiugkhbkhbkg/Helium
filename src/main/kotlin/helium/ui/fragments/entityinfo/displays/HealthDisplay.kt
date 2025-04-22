@@ -1,5 +1,6 @@
 package helium.ui.fragments.entityinfo.displays
 
+import arc.Core
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Font
@@ -8,6 +9,7 @@ import arc.graphics.g2d.GlyphLayout
 import arc.math.Mat
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
+import arc.struct.Bits
 import arc.util.Align
 import arc.util.Tmp.c1
 import helium.He
@@ -25,6 +27,7 @@ import kotlin.math.max
 
 class HealthModel: Model<Healthc>{
   override lateinit var entity: Healthc
+  override lateinit var disabledTeam: Bits
 
   var detailWidth = 0f
   var shieldWidth = 0f
@@ -86,6 +89,22 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   }
   override val HealthModel.prefHeight: Float get() = style.height
 
+  override fun drawConfig(centX: Float, centerY: Float) {
+    val size = Scl.scl(64f)
+    val off = Scl.scl(16f)
+    Icon.add.draw(
+      centX - size/2f, centerY - size/2f + off,
+      size, size,
+    )
+
+    Fonts.outline.draw(
+      Core.bundle["infos.healthDisplay"],
+      centX, centerY - off,
+      Color.white, 0.9f, true,
+      Align.center
+    )
+  }
+
   override fun HealthModel?.checkHovering(isHovered: Boolean): Boolean {
     this?.hovering = isHovered
     return isHovered
@@ -137,7 +156,6 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
       0f, 0f
     )
 
-    shieldWidth = 0f
     style.shieldBar?.also {
       val n = Mathf.ceil(insectShield/entity.maxHealth())
       val insProgShield = (insectShield%entity.maxHealth())/entity.maxHealth()
@@ -175,7 +193,8 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
 
     //The texture of the text is decoupled from the UI, should be drawn in groups to optimize performance
     Draw.z(10f)
-    val alp = if (hovering) 1f else alpha*(Mathf.clamp((scale - 0.5f)/0.5f))
+    val rate = drawHeight/style.font.capHeight
+    val alp = if (hovering) 1f else alpha*(Mathf.clamp((rate - 0.75f)/0.5f))
     if(alp > 0.001f){
       updateText(drawWidth, scale, alp)
       if (style.shieldBar != null) {

@@ -5,29 +5,39 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
+import arc.math.Angles
 import arc.math.Mathf
 import arc.math.geom.Geometry
 import arc.math.geom.Rect
 import arc.math.geom.Vec2
+import arc.scene.Element
 import arc.scene.Group
-import arc.struct.ObjectSet
-import arc.struct.OrderedSet
-import arc.struct.Seq
+import arc.scene.event.ClickListener
+import arc.scene.event.InputEvent
+import arc.scene.event.Touchable
+import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
+import arc.struct.*
+import arc.util.Align
 import arc.util.Time
 import arc.util.Tmp
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
 import helium.He.config
+import helium.addEventBlocker
+import helium.graphics.DrawUtils
 import helium.ui.fragments.entityinfo.Side.*
 import helium.util.MutablePair
 import helium.util.mto
 import mindustry.Vars
+import mindustry.game.Team
 import mindustry.gen.*
 import mindustry.gen.Unit
 import mindustry.graphics.Drawf
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.input.Binding
+import mindustry.ui.Fonts
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -37,6 +47,9 @@ class EntityInfoFrag {
     private val tempEntry = EntityEntry()
   }
 
+  var controlling = false
+
+  private val disabledTeams = ObjectMap<EntityInfoDisplay<*>, Bits>()
   private val displays = Seq<EntityInfoDisplay<Model<*>>>()
 
   private val all = ObjectSet<EntityEntry>()
@@ -53,6 +66,7 @@ class EntityInfoFrag {
   private val screenViewport = Rect()
 
   private lateinit var infoFill: Group
+  private lateinit var configPane: Table
 
   /**for hot-update*/
   fun displaySetupUpdated(){
@@ -64,6 +78,7 @@ class EntityInfoFrag {
   @Suppress("UNCHECKED_CAST")
   fun addDisplay(display: EntityInfoDisplay<*>) {
     displays.add(display as EntityInfoDisplay<Model<*>>)
+    disabledTeams.put(display, Bits(256))
     displaySetupUpdated()
   }
 
@@ -73,6 +88,7 @@ class EntityInfoFrag {
     display as EntityInfoDisplay<Model<*>>
     if (index == -1) displays.add(display)
     else displays.insert(index, display)
+    disabledTeams.put(display, Bits(256))
     displaySetupUpdated()
   }
 
@@ -82,6 +98,7 @@ class EntityInfoFrag {
     display as EntityInfoDisplay<Model<*>>
     if (index == -1 || index == displays.size - 1) displays.add(display)
     else displays.insert(index + 1, display)
+    disabledTeams.put(display, Bits(256))
     displaySetupUpdated()
   }
 
@@ -96,7 +113,204 @@ class EntityInfoFrag {
   @Suppress("UNCHECKED_CAST")
   fun removeDisplay(display: EntityInfoDisplay<*>) {
     displays.remove(display as EntityInfoDisplay<Model<*>>)
+    disabledTeams.remove(display)
     displaySetupUpdated()
+  }
+
+  fun toggleSwitchConfig() {
+    if (configPane.visible) {
+      configPane.visible = false
+    }
+    else {
+      buildConfig(configPane)
+      configPane.visible = true
+    }
+  }
+
+  private fun buildConfig(table: Table) {
+    table.clearChildren()
+
+    val teams = Vars.state.teams.active
+    table.add(object: Element(){
+      var current: EntityInfoDisplay<*>? = null
+      var hovering: Any? = null
+
+      init {
+        touchable = Touchable.enabled
+        addListener(object: ClickListener(){
+          override fun mouseMoved(event: InputEvent, x: Float, y: Float): Boolean {
+            val offX = x - width/2f
+            val offY = y - height/2f
+
+            val angle = Angles.angle(offX, offY)
+            val distance = Mathf.dst(offX, offY)
+
+            val r1 = width/6f
+            val r2 = width/3.5f
+            val r3 = width/2f
+
+            hovering = null
+
+            if (current != null) {
+              val teamBaseAng = 120f
+              val teamItemWidth = 300f/teams.size
+              teams.forEachIndexed { i, t ->
+                val offAng = teamBaseAng + i*teamItemWidth + teamItemWidth/2f
+
+                if (distance > r1 && distance < r2 && Angles.near(angle, offAng, teamItemWidth/2f)) {
+                  hovering = t.team
+                }
+              }
+            }
+
+            val displayBaseAng = 90f
+            val displayItemDelta = 360f/displays.size
+            displays.forEachIndexed { i, dis ->
+              val offAng = displayBaseAng + i*displayItemDelta + displayItemDelta/2f
+
+              if (distance > r2 && distance < r3 && Angles.near(angle, offAng, displayItemDelta/2f)) {
+                hovering = dis
+              }
+            }
+
+            return true
+          }
+
+          override fun clicked(event: InputEvent, x: Float, y: Float) {
+            super.clicked(event, x, y)
+
+            if (hovering == null){
+              toggleSwitchConfig()
+              return
+            }
+
+            hovering?.also { when(it) {
+              is EntityInfoDisplay<*> -> current = it
+              is Team -> current?.also { dis -> disabledTeams[dis].flip(it.id) }
+            } }
+          }
+        })
+
+        addEventBlocker()
+      }
+
+      override fun draw() {
+        validate()
+
+        val centX = x + width/2f
+        val centY = y + height/2f
+
+        val r1 = width/6f
+        val r2 = width/3.5f
+        val r3 = width/2f
+
+        Draw.color(Color.darkGray, 0.5f)
+        Fill.circle(centX, centY, r1)
+
+        Draw.color(Color.darkGray, 0.8f)
+        DrawUtils.circleStrip(
+          centX, centY,
+          r1, r2,
+          60f, 60f
+        )
+
+        DrawUtils.innerCircle(
+          centX, centY, r2, r3,
+          Tmp.c1.set(Color.darkGray).a(0.6f), Tmp.c1, 3
+        )
+
+        val teamBaseAng = 120f
+        val teamItemWidth = 300f/teams.size
+        teams.forEachIndexed { i, t ->
+          val light = hovering == t.team
+          Draw.color(t.team.color, Color.white, if (light) 0.5f else 0f)
+          Draw.alpha(0.8f)
+          DrawUtils.circleStrip(
+            centX, centY,
+            r1, r2,
+            teamItemWidth,
+            teamBaseAng + i*teamItemWidth
+          )
+        }
+
+        Lines.stroke(Scl.scl(3f), Pal.darkerGray)
+        Lines.circle(centX, centY, r1)
+        Lines.circle(centX, centY, r2)
+        DrawUtils.drawLinesRadio(
+          centX, centY,
+          0f, r1,
+          3, 90f
+        )
+        DrawUtils.drawLinesRadio(
+          centX, centY,
+          r1, r2,
+          teams.size, 120f,
+          300f, true
+        )
+        DrawUtils.drawLinesRadio(
+          centX, centY,
+          r2, r3,
+          displays.size, 90f
+        )
+
+        Lines.stroke(Scl.scl(4f), Pal.accent)
+        teams.forEachIndexed { i, t ->
+          current?.also { dis ->
+            val disabled = disabledTeams[dis]
+
+            if (!disabled.get(t.team.id)) {
+              DrawUtils.circleFrame(
+                centX, centY,
+                r1, r2,
+                teamItemWidth,
+                teamBaseAng + i*teamItemWidth
+              )
+            }
+          }
+        }
+
+        Fonts.outline.draw(
+          Core.bundle["infos.enabledTeams"],
+          centX, centY + (r1 + r2)/2f,
+          Color.white, 0.85f, true,
+          Align.center
+        )
+
+        val displayBaseAng = 90f
+        val displayItemDelta = 360f/displays.size
+        val radOff = (r2 + r3)/2f
+        displays.forEachIndexed { i, dis ->
+          val angle = displayBaseAng + i*displayItemDelta + displayItemDelta/2f
+
+          val dx = centX + radOff*Mathf.cosDeg(angle)
+          val dy = centY + radOff*Mathf.sinDeg(angle)
+
+          if (current == dis) {
+            DrawUtils.circleStrip(
+              centX, centY,
+              r2, r3,
+              displayItemDelta,
+              displayBaseAng + i*displayItemDelta,
+              Tmp.c1.set(Pal.accent).a(0f),
+              Tmp.c2.set(Tmp.c1).a(0.8f)
+            )
+          }
+          else if (hovering == dis) {
+            DrawUtils.circleStrip(
+              centX, centY,
+              r2, r3,
+              displayItemDelta,
+              displayBaseAng + i*displayItemDelta,
+              Tmp.c1.set(Pal.accent).a(0f),
+              Tmp.c2.set(Tmp.c1).a(0.4f + Mathf.absin(6f, 0.2f))
+            )
+          }
+
+          Draw.reset()
+          dis.drawConfig(dx, dy)
+        }
+      }
+    }).size(600f, 600f)
   }
 
   fun build(parent: Group){
@@ -125,6 +339,15 @@ class EntityInfoFrag {
 
     parent.addChildAt(0, infoFill)
     infoFill.fillParent = true
+
+    parent.fill { config ->
+      configPane = config
+      config.touchable = Touchable.enabled
+      config.clicked {
+        toggleSwitchConfig()
+      }
+      config.visible = false
+    }
   }
 
   fun reset(){
@@ -156,7 +379,7 @@ class EntityInfoFrag {
       Fill.rect(rect)
     }
 
-    if (Core.input.keyDown(config.entityInfoHotKey)) {
+    if (controlling || Core.input.keyDown(config.entityInfoHotKey)) {
       currHov.forEach { e ->
         val rad = e.size*1.44f + Mathf.absin(4f, 2f)
         val origX = e.entity.x
@@ -200,9 +423,10 @@ class EntityInfoFrag {
 
       e.display.forEach r@{ entry ->
         val display = entry.first
+        if (!display.worldRender) return@r
         val model = entry.second?:return@r
 
-        if (!display.worldRender) return@r
+        if (model.disabledTeam.get(e.entity.team().id)) return@r
 
         display.apply {
           if (
@@ -218,7 +442,7 @@ class EntityInfoFrag {
 
   private fun updateShowing() {
     val mouse = Core.input.mouseWorld()
-    val hotkeyDown = Core.input.keyDown(config.entityInfoHotKey)
+    val hotkeyDown = controlling || Core.input.keyDown(config.entityInfoHotKey)
     if (hotkeyDown) {
       if (!selecting && Core.input.keyDown(Binding.select)) {
         selecting = true
@@ -240,7 +464,7 @@ class EntityInfoFrag {
     currHov.clear()
 
     Groups.all.forEach { entity ->
-      if (entity !is Posc) return@forEach
+      if (entity !is Teamc) return@forEach
 
       val e = tempEntry
       e.entity = entity
@@ -322,6 +546,7 @@ class EntityInfoFrag {
           if (display.hoveringOnly) null
           else {
             val model = (display as EntityInfoDisplay<*>).obtainModel(entity)
+            model.disabledTeam = disabledTeams.get(display) { Bits() }
             if (display is InputEventChecker<*>) {
               display as InputEventChecker<InputCheckerModel<*>>
               model as InputCheckerModel<*>
@@ -366,6 +591,7 @@ class EntityInfoFrag {
           if (!it.second.checkHovering(checkIsHovering(e)) && hoveringOnly) return@r
           if (it.second == null){
             val model = obtainModel(e.entity)
+            model.disabledTeam = disabledTeams.get(this) { Bits() }
             if (this is InputEventChecker<*>){
               this as InputEventChecker<InputCheckerModel<*>>
               model as InputCheckerModel
@@ -411,6 +637,8 @@ class EntityInfoFrag {
         if (!display.screenRender) return@f
         val model = entry.second?: return@f
 
+        if (model.disabledTeam.get(e.entity.team().id)) return@f
+
         display.apply {
           if (
             (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
@@ -435,6 +663,7 @@ class EntityInfoFrag {
       e.display.forEach f@{ entry ->
         val display = entry.first
         val model = entry.second?: return@f
+        if (model.disabledTeam.get(e.entity.team().id)) return@f
 
         val dir = if(display.layoutSide == CENTER) Tmp.p1.set(0, 0) else Geometry.d4(display.layoutSide.dir)
         val offset = Tmp.v1.set(sizeOff*dir.x, sizeOff*dir.y)
@@ -506,11 +735,11 @@ class EntityInfoFrag {
   }
 
   private fun checkIsHovering(e: EntityEntry) =
-    hovering.contains(e) || (Core.input.keyDown(config.entityInfoHotKey) && currHov.contains(e))
+    hovering.contains(e) || ((controlling || Core.input.keyDown(config.entityInfoHotKey)) && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {
-  lateinit var entity: Posc
+  lateinit var entity: Teamc
   var alpha = 0f
   var showing = false
   var isValid = false

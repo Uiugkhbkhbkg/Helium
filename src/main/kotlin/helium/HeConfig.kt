@@ -40,19 +40,20 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var enableUnitStatusDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
-  @ConfigItem var entityInfoHotKey = KeyCode.altLeft
-  @ConfigItem var entityInfoScale = 1f
-  @ConfigItem var entityInfoAlpha = 1f
+  @ConfigItem var enableRangeDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
-  @ConfigItem var hiddenTeams = intArrayOf()
   @ConfigItem var showAttackRange = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showHealRange = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showOverdriveRange = true
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var entityInfoHotKey = KeyCode.altLeft
+  @ConfigItem var entityInfoScale = 1f
+  @ConfigItem var entityInfoAlpha = 1f
+    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
 
   @ConfigItem var enableBetterPlacement = true
-  @ConfigItem var doubleFastSlots = true
 
   fun load() {
     if (!configFile.exists()) {

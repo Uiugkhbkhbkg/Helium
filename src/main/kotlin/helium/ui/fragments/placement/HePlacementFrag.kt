@@ -2,11 +2,14 @@ package helium.ui.fragments.placement
 
 import arc.Core
 import arc.Events
+import arc.func.Boolp
+import arc.func.Prov
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Lines
 import arc.input.KeyCode
 import arc.math.Interp
+import arc.math.Mathf
 import arc.scene.Element
 import arc.scene.Group
 import arc.scene.actions.Actions
@@ -16,24 +19,27 @@ import arc.scene.event.InputEvent
 import arc.scene.event.Touchable
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
-import arc.scene.ui.ButtonGroup
-import arc.scene.ui.Image
-import arc.scene.ui.ImageButton
-import arc.scene.ui.ScrollPane
-import arc.scene.ui.layout.HorCollapser
-import arc.scene.ui.layout.Scl
-import arc.scene.ui.layout.Table
+import arc.scene.ui.*
+import arc.scene.ui.Tooltip.Tooltips
+import arc.scene.ui.layout.*
 import arc.struct.ObjectFloatMap
 import arc.struct.ObjectMap
+import arc.struct.OrderedMap
 import arc.struct.Seq
 import arc.util.Align
+import helium.He
 import helium.He.config
 import helium.ui.HeAssets
+import helium.ui.elements.HeCollapser
 import helium.util.accessField
 import mindustry.Vars
+import mindustry.ai.UnitCommand
+import mindustry.ai.UnitStance
 import mindustry.core.UI
+import mindustry.game.EventType
 import mindustry.game.EventType.BlockInfoEvent
 import mindustry.game.EventType.WorldLoadEvent
+import mindustry.gen.Call
 import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustry.graphics.Pal
@@ -42,6 +48,7 @@ import mindustry.ui.Fonts
 import mindustry.ui.Styles
 import mindustry.ui.fragments.PlacementFragment
 import mindustry.world.Block
+import mindustry.world.meta.StatValues
 import kotlin.math.roundToInt
 
 class HePlacementFrag {
@@ -52,6 +59,8 @@ class HePlacementFrag {
       get() = Vars.control.input.block
       set(value) { Vars.control.input.block = value }
   }
+
+  private val toolEntries = OrderedMap<String, ToolEntry>()
 
   private var selectionShown = false
 
@@ -64,6 +73,7 @@ class HePlacementFrag {
 
   private val invSlots = Seq<InvSlot>()
   private var currentSlot: InvSlot? = null
+  private var invPage = 0
 
   private lateinit var topLevel: Table
   private lateinit var container: Table
@@ -75,13 +85,18 @@ class HePlacementFrag {
   private lateinit var fastInventory: Table
   private lateinit var blockSelection: Table
   private lateinit var toolButtons: Table
+  private var toolsTable: Table? = null
 
   private lateinit var blockTable: Table
   private lateinit var blockPane: ScrollPane
 
-  private lateinit var foldBlocks: HorCollapser
-  private lateinit var foldTools: HorCollapser
+  private lateinit var foldBlocks: HeCollapser
+  private lateinit var foldTools: HeCollapser
   private lateinit var foldIcon: Group
+
+  private var lastPage = 0
+  private var invAnimateActivating = false
+  private var invAnimateProgress = 0f
 
   init {
     Events.on(WorldLoadEvent::class.java) { event ->
@@ -90,8 +105,57 @@ class HePlacementFrag {
         currBlock = null
 
         rebuildCategory()
+
+        invSlots.forEach { it.load() }
       }
     }
+  }
+
+  fun addTool(
+    name: String,
+    icon: Drawable,
+    checked: Boolp? = null,
+    tip: Prov<String>? = null,
+    listener: Runnable
+  ) {
+    addTool(name, { icon }, checked, tip, listener)
+  }
+
+  fun addTool(
+    name: String,
+    icon: Prov<Drawable>,
+    checked: Boolp? = null,
+    tip: Prov<String>? = null,
+    listener: Runnable
+  ) {
+    toolEntries.put(name, ToolEntry(icon, checked, tip, listener))
+    toolsTable?.also { rebuildTools(it) }
+  }
+
+  fun removeTool(name: String) {
+    toolEntries.remove(name)
+    toolsTable?.also { rebuildTools(it) }
+  }
+
+  fun hideTool(name: String) {
+    setShown(name, false)
+  }
+
+  fun showTool(name: String) {
+    setShown(name, true)
+  }
+
+  fun setShown(name: String, shown: Boolean) {
+    val entry = toolEntries.get(name)
+    if (entry != null) {
+      entry.shown = shown
+    }
+
+    toolsTable?.also { rebuildTools(it) }
+  }
+
+  fun clearTools() {
+    toolEntries.clear()
   }
 
   fun build(parent: Group) {
@@ -104,44 +168,252 @@ class HePlacementFrag {
 
         update()
       }
-      toggler.bottom().right().visible { Vars.ui.hudfrag.shown }
+      toggler.bottom().right().visible { config.enableBetterPlacement && Vars.ui.hudfrag.shown }
 
-      toggler.table{ cont ->
-        container = cont
+      toggler.stack(
+        Table{ blocks ->
+          blocks.bottom().right().add(HeCollapser(collX = true, collY = false) { cont ->
+            container = cont
 
-        cont.table(Tex.buttonEdge2){ top ->
-          top.left()
-          topInfo = top
-          buildTopInfo(top)
-        }.growX().fillY().touchable(Touchable.enabled)
-          .visible{ Vars.control.input.block != null || menuHoverBlock != null }
-        cont.row()
-        cont.table(Tex.pane){ bottom ->
-          bottom.margin(4f).top().defaults().fillX().growY()
+            cont.table(Tex.buttonEdge2) { top ->
+              top.left()
+              topInfo = top
+              buildTopInfo(top)
+            }.growX().fillY().touchable(Touchable.enabled)
+              .visible { Vars.control.input.block != null || menuHoverBlock != null }
+            cont.row()
+            cont.table(Tex.pane) { bottom ->
+              bottom.margin(4f).top().defaults().fillX().growY()
 
-          bottom.table { fastInv ->
-            fastInv.top()
-            fastInventory = fastInv
-            buildFastInventory(fastInventory)
-          }.padLeft(4f)
-          bottom.image().color(Color.darkGray).width(4f).growY()
-            .padLeft(4f).padRight(-2f)
-          bottom.add(HorCollapser(true) { blocks ->
-            blocks.top()
-            blockSelection = blocks
-            buildBlockSelection(blockSelection)
-          }.setDuration(0.3f, Interp.pow3Out).also { foldBlocks = it })
-          bottom.image().color(Color.darkGray).width(4f).growY()
-            .padLeft(-2f).padRight(0f)
-          bottom.table{ tools ->
-            tools.top()
-            toolButtons = tools
-            buildToolbar(toolButtons)
-          }
-        }.fill()
-      }.fill()
+              bottom.table { fastInv ->
+                fastInv.top()
+                fastInventory = fastInv
+                buildFastInventory(fastInventory)
+              }.padLeft(4f)
+              bottom.image().color(Color.darkGray).width(4f).growY()
+                .padLeft(4f).padRight(-2f)
+              bottom.add(HeCollapser(collX = true, collY = false, collapsed = true) { blocks ->
+                blocks.top()
+                blockSelection = blocks
+                buildBlockSelection(blockSelection)
+              }.setDuration(0.3f, Interp.pow3Out).also { foldBlocks = it })
+              bottom.image().color(Color.darkGray).width(4f).growY()
+                .padLeft(-2f).padRight(0f)
+              bottom.table { tools ->
+                tools.top()
+                toolButtons = tools
+                buildToolbar(toolButtons)
+              }
+            }.fill()
+          }.setDuration(0.2f, Interp.pow3Out).setCollapsed { Vars.control.input.commandMode }).fillX()
+        },
+        Table{ commands ->
+          commands.bottom().right().add(HeCollapser(collX = false, collY = true, collapsed = true, Tex.pane) { com ->
+            buildCommands(com)
+          }.setDuration(0.2f, Interp.pow3Out).setCollapsed { !Vars.control.input.commandMode }).fillY()
+        }
+      ).fill()
     }
   }
+
+  private fun buildCommands(table: Table) {
+    table.touchable = Touchable.enabled
+    table.add(Core.bundle.get("commandmode.name")).fill().center().labelAlign(Align.center).width(200f).row()
+    table.image().color(Pal.accent).growX().pad(20f).padTop(0f).padBottom(4f).row()
+    table.table { u ->
+      u.left()
+      val curCount = intArrayOf(0)
+      val commands = Seq<UnitCommand>()
+
+      var currentCommand: UnitCommand? = null
+      var currentStance: UnitStance? = null
+
+      val stances = Seq<UnitStance>()
+
+      val rebuildCommand = Runnable {
+        u.clearChildren()
+        val units = Vars.control.input.selectedUnits
+        if (units.size > 0) {
+          val counts = IntArray(Vars.content.units().size)
+          for (unit in units) {
+            counts[unit.type.id.toInt()]++
+          }
+          commands.clear()
+          stances.clear()
+          var firstCommand = false
+          var firstStance = false
+          val unitlist = u.table().growX().left().get()
+          unitlist.left()
+
+          var col = 0
+          for (i in counts.indices) {
+            if (counts[i] > 0) {
+              val type = Vars.content.unit(i)
+              unitlist.add(StatValues.stack(type, counts[i])).pad(4f).with { b ->
+                b.clearListeners()
+                b.addListener(Tooltips.getInstance().create(type.localizedName, false))
+
+                val listener = ClickListener()
+
+                //left click -> select
+                b.clicked(KeyCode.mouseLeft) {
+                  Vars.control.input.selectedUnits.removeAll { unit -> unit.type !== type }
+                  Events.fire(EventType.Trigger.unitCommandChange)
+                }
+                //right click -> remove
+                b.clicked(KeyCode.mouseRight) {
+                  Vars.control.input.selectedUnits.removeAll { unit -> unit.type === type }
+                  Events.fire(EventType.Trigger.unitCommandChange)
+                }
+
+                b.addListener(listener)
+                b.addListener(HandCursorListener())
+                //gray on hover
+                b.update {
+                  (b.getChildren().first() as Group).getChildren().first()
+                    .setColor(if (listener.isOver()) Color.lightGray else Color.white)
+                }
+              }
+
+              if (++col%7 == 0) {
+                unitlist.row()
+              }
+
+              if (!firstCommand) {
+                commands.add(type.commands)
+                firstCommand = true
+              }
+              else {
+                //remove commands that this next unit type doesn't have
+                commands.removeAll { com -> !type.commands.contains(com) }
+              }
+
+              if (!firstStance) {
+                stances.add(type.stances)
+                firstStance = true
+              }
+              else {
+                //remove commands that this next unit type doesn't have
+                stances.removeAll { st -> !type.stances.contains(st) }
+              }
+            }
+          }
+
+          //list commands
+          if (commands.size > 1) {
+            u.row()
+
+            u.table { coms ->
+              coms.left()
+              var scol = 0
+              for (command in commands) {
+                coms.button(Icon.icons.get(command.icon, Icon.cancel), Styles.clearNoneTogglei) {
+                  Call.setUnitCommand(Vars.player, units.mapInt { un -> un.id }.toArray(), command)
+                }.checked { i -> currentCommand === command }.size(50f)
+                  .tooltip(command.localized(), true)
+
+                if (++scol%6 == 0) coms.row()
+              }
+            }.fillX().padTop(4f).left()
+          }
+
+          //list stances
+          if (stances.size > 1) {
+            u.row()
+
+            if (commands.size > 1) {
+              u.add(Image(Tex.whiteui)).height(3f).color(Pal.gray).pad(7f).growX().row()
+            }
+
+            u.table { coms ->
+              coms.left()
+              var scol = 0
+              for (stance in stances) {
+                coms.button(Icon.icons.get(stance.icon, Icon.cancel), Styles.clearNoneTogglei) {
+                  Call.setUnitStance(Vars.player, units.mapInt { un -> un.id }.toArray(), stance)
+                }.checked { i -> currentStance === stance }.size(50f)
+                  .tooltip(stance.localized(), true)
+
+                if (++scol%6 == 0) coms.row()
+              }
+            }.fillX().padTop(4f).left()
+          }
+        }
+        else {
+          u.add(Core.bundle.get("commandmode.nounits")).color(Color.lightGray).growX().center()
+            .labelAlign(Align.center).pad(6f)
+        }
+      }
+
+      u.update {
+        var hadCommand = false
+        var hadStance = false
+        var shareCommand: UnitCommand? = null
+        var shareStance: UnitStance? = null
+
+        for (unit in Vars.control.input.selectedUnits) {
+          if (unit.isCommandable()) {
+            val nextCommand = unit.command().command
+
+            if (hadCommand) {
+              if (shareCommand !== nextCommand) {
+                shareCommand = null
+              }
+            }
+            else {
+              shareCommand = nextCommand
+              hadCommand = true
+            }
+
+            val nextStance = unit.command().stance
+
+            if (hadStance) {
+              if (shareStance !== nextStance) {
+                shareStance = null
+              }
+            }
+            else {
+              shareStance = nextStance
+              hadStance = true
+            }
+          }
+        }
+
+        currentCommand = shareCommand
+        currentStance = shareStance
+
+        val size = Vars.control.input.selectedUnits.size
+        if (curCount[0] != size) {
+          curCount[0] = size
+          rebuildCommand.run()
+        }
+
+        //not a huge fan of running input logic here, but it's convenient as the stance arrays are all here...
+        for (stance in stances) {
+          //first stance must always be the stop stance
+          if (stance.keybind != null && Core.input.keyTap(stance.keybind)) {
+            Call.setUnitStance(
+              Vars.player,
+              Vars.control.input.selectedUnits.mapInt { un -> un.id }.toArray(),
+              stance
+            )
+          }
+        }
+        for (command in commands) {
+          //first stance must always be the stop stance
+          if (command.keybind != null && Core.input.keyTap(command.keybind)) {
+            Call.setUnitCommand(
+              Vars.player,
+              Vars.control.input.selectedUnits.mapInt { un -> un.id }.toArray(),
+              command
+            )
+          }
+        }
+      }
+      rebuildCommand.run()
+    }.grow()
+  }
+
 
   private fun buildTopInfo(table: Table) {
     table.update {
@@ -150,8 +422,6 @@ class HePlacementFrag {
       val displayBlock = if (menuHoverBlock != null) menuHoverBlock else Vars.control.input.block
       val isHovered = displayBlock == null
 
-      //don't refresh unnecessarily
-      //refresh only when the hover state changes, or the displayed block changes
       if (wasHovered == isHovered && lastDisplayBlock === displayBlock) return@update
 
       topTable.clear()
@@ -160,7 +430,6 @@ class HePlacementFrag {
       lastDisplayBlock = displayBlock
       wasHovered = isHovered
 
-      //show details of selected block, with costs
       if (displayBlock != null) {
         topTable.table{ name ->
           name.table { header ->
@@ -185,7 +454,7 @@ class HePlacementFrag {
               line.left()
               line.image(stack.item.uiIcon).size((8*2).toFloat())
 
-              line.add(HorCollapser(!selectionShown){ col ->
+              line.add(HeCollapser(collX = true, collY = false, collapsed = !selectionShown) { col ->
                 col.add(stack.item.localizedName).maxWidth(140f).fillX().color(Color.lightGray).padLeft(2f).left()
                   .get().setEllipsis(true)
               }.setCollapsed { !selectionShown }.setDuration(0.3f, Interp.pow3Out)).fill().pad(0f)
@@ -210,7 +479,7 @@ class HePlacementFrag {
           topTable.table { b ->
             b.image(Icon.cancel).padRight(2f).color(Color.scarlet)
             b.add(if (!Vars.player.isBuilder) "@unit.nobuild" else if (!displayBlock.supportsEnv(Vars.state.rules.env)) "@unsupported.environment" else "@banned")
-              .width(190f).wrap()
+              .growX().wrap()
             b.left()
           }.padTop(2f).left()
         }
@@ -221,7 +490,24 @@ class HePlacementFrag {
   private fun update() {
     if (selectionShown) {
       currentSlot?.also { slot ->
-        slot.block = currBlock
+        if (slot.block != currBlock) {
+          slot.block = currBlock
+          slot.save()
+        }
+      }
+    }
+
+    if (!invAnimateActivating && lastPage != invPage){
+      lastPage = invPage
+      invAnimateActivating = true
+      invAnimateProgress = 0f
+    }
+
+    if (invAnimateActivating) {
+      invAnimateProgress = Mathf.approachDelta(invAnimateProgress, 1f, 0.06f)
+
+      if (invAnimateProgress >= 1) {
+        invAnimateActivating = false
       }
     }
   }
@@ -233,7 +519,7 @@ class HePlacementFrag {
       blocksSelect.margin(4f).marginTop(0f)
       blockPane = blocksSelect.top().pane(Styles.smallPane) { blocks -> blockTable = blocks }
         .update { pane ->
-          if (pane!!.hasScroll()) {
+          if (pane.hasScroll()) {
             val result = Core.scene.hoverElement
             if (result == null || !result.isDescendantOf(pane)) {
               Core.scene.setScrollFocus(null)
@@ -242,13 +528,7 @@ class HePlacementFrag {
         }.fill().maxHeight(5*48f).get()
     }.growY().bottom().touchable(Touchable.enabled)
     selection.table(Styles.black6) { categories ->
-      //categories.add(object : Image(Styles.black6) {
-      //  override fun draw() {
-      //    if (height <= Scl.scl(3f)) return
-      //    drawable.draw(x, y, width, height - Scl.scl(3f))
-      //  }
-      //}).colspan(2).growX().growY().padTop(-3f).row()
-      categories.top().pane { catPane ->
+      categories.top().pane(Styles.noBarPane) { catPane ->
         catPane.defaults().size(48f)
         val group = ButtonGroup<ImageButton>()
 
@@ -292,14 +572,13 @@ class HePlacementFrag {
     blockTable.top().margin(5f)
 
     var index = 0
-    val rowItems = if (config.doubleFastSlots) 4 else 5
 
     val group = ButtonGroup<ImageButton>()
     group.setMinCheckCount(0)
 
     for (block in getUnlockedByCategory(currentCategory)) {
       if (!unlocked(block)) continue
-      if (index++%rowItems == 0) {
+      if (index++%4 == 0) {
         blockTable.row()
       }
 
@@ -327,7 +606,7 @@ class HePlacementFrag {
               ) && Vars.player.isBuilder
           ) Color.white
           else Color.gray
-        button.forEach { elem -> elem!!.setColor(color) }
+        button.forEach { elem -> elem.setColor(color) }
         button.setChecked(currBlock === block)
         if (!block.isPlaceable) {
           button.forEach { elem -> elem.setColor(Color.darkGray) }
@@ -363,8 +642,9 @@ class HePlacementFrag {
   private fun getSelectedBlock(cat: Category) =
     selectedBlocks.get(cat) { getByCategory(cat).find { block -> this.unlocked(block) } }
 
-  private fun getByCategory(cat: Category) = returnArray.selectFrom(Vars.content.blocks()) { block ->
-    block!!.category == cat && block.isVisible && block.environmentBuildable() }
+  private fun getByCategory(cat: Category) =
+    returnArray.selectFrom(Vars.content.blocks())
+    { block -> block.category == cat && block.isVisible && block.environmentBuildable() }
 
   private fun getUnlockedByCategory(cat: Category) =
     returnArray.selectFrom(Vars.content.blocks()) { block ->
@@ -376,33 +656,27 @@ class HePlacementFrag {
     && block.supportsEnv(Vars.state.rules.env)
 
   private fun buildFastInventory(table: Table) {
-    if (config.doubleFastSlots) {
-      table.table { left ->
-        left.defaults().size(48f)
-        for (i in 0 until 5) {
-          val slot = InvSlot()
-          left.add(slot)
-          left.row()
+    table.defaults().size(48f)
+    for (i in 0 until 8) {
+      if (i > 0 && i % 2 == 0) table.row()
+      val slot = InvSlot(i)
+      table.add(slot)
 
-          invSlots.add(slot)
-        }
-      }.growY()
+      invSlots.add(slot)
     }
 
-    table.table{ right ->
-      for (i in 0 until 4) {
-        right.defaults().size(48f)
-        val slot = InvSlot()
-        right.add(slot)
-        right.row()
+    table.row()
 
-        invSlots.add(slot)
-      }
+    table.button(Icon.flipX, Styles.clearNonei, 28f){
+      if (invAnimateActivating) return@button
 
-      foldIcon = right.button(Icon.leftOpen, Styles.clearNonei, 28f){
-        toggleSelectionShown()
-      }.get()
-    }.growY()
+      invPage = (invPage + 1)%3
+      currentSlot = null
+    }
+
+    foldIcon = table.button(Icon.leftOpen, Styles.clearNonei, 28f){
+      toggleSelectionShown()
+    }.get()
   }
 
   private fun toggleSelectionShown() {
@@ -440,19 +714,50 @@ class HePlacementFrag {
       }
       tmp.children.end()
     }.fillX().growY()
-    table.add(HorCollapser(false, HeAssets.grayUI){ tools ->
+    table.add(HeCollapser(collX = true, collY = false, background = HeAssets.grayUIAlpha) { tools ->
       tools.top().defaults().size(48f)
-
-      tools.button(Icon.effect, Styles.clearNonei, 28f) {
-
-      }
+      toolsTable = tools
+      rebuildTools(tools)
     }.setDuration(0.3f, Interp.pow3Out).also { foldTools = it }).fillX().growY()
   }
 
-  private inner class InvSlot(val background: Drawable? = HeAssets.slotsBack): Element() {
-    var block: Block? = null
+  private fun rebuildTools(table: Table) {
+    table.clearChildren()
+    table.top().defaults().top().size(50f).pad(0f)
 
+    toolEntries.values().forEach { entry ->
+      if (!entry.shown) return@forEach
+
+      val button = table.button(
+        Tex.clear,
+        if (entry.checked == null) Styles.clearNonei else Styles.clearNoneTogglei,
+        entry.listener
+      ).update { b ->
+        b.style.imageUp = entry.icon.get()
+        b.resizeImage(36f)
+        entry.checked?.also { b.setChecked(it.get()) }
+      }.get()
+      entry.hoverTip?.also { hoverTip ->
+        button.addListener(Tooltip { t ->
+          t.background(Tex.button).add(hoverTip.get()).update { l ->
+            l.setText(hoverTip.get())
+            l.pack()
+          }
+        }.also { it.allowMobile = true })
+      }
+      table.row()
+    }
+  }
+
+  private inner class InvSlot(val id: Int, val background: Drawable? = HeAssets.slotsBack): Element() {
+    private val blocks: Array<Block?> = arrayOfNulls(3)
+
+    var block: Block?
+      get() = blocks[invPage]
+      set(value) { blocks[invPage] = value }
     private val selected: Boolean get() = currentSlot == this
+
+    private val numKey = KeyCode.all[KeyCode.num1.ordinal + id]
 
     init {
       clicked {
@@ -486,23 +791,106 @@ class HePlacementFrag {
       })
     }
 
+    fun save(){
+      blocks.forEachIndexed { i, block ->
+        He.global.put("fast-slot-$id-$i", block?.name?:"!empty")
+      }
+    }
+
+    fun load(){
+      for (i in 0 until blocks.size) {
+        val name = He.global.getString("fast-slot-$id-$i", "!empty")
+
+        blocks[i] = Vars.content.block(name)
+      }
+    }
+
     override fun act(delta: Float) {
       super.act(delta)
       if (block != null && selected && currBlock != block) currentSlot = null
+
+      if (Core.input.keyTap(numKey)) fireClick()
     }
 
     override fun draw() {
       super.draw()
 
       background?.draw(x, y, width, height)
-      block?.also { Draw.rect(it.uiIcon, x + width / 2, y + height / 2, Scl.scl(32f), Scl.scl(32f)) }
+
+      val fullSize = Scl.scl(32f)
+      val smallSize = Scl.scl(14f)
+      val prog = Interp.pow3Out.apply(invAnimateProgress)
+      if (invAnimateActivating) {
+        val last = blocks[(invPage + 2)%3]
+        val center = blocks[invPage%3]
+        val next = blocks[(invPage + 1)%3]
+
+        last?.also {
+          val s = Mathf.lerp(fullSize, smallSize, prog)
+          Draw.rect(
+            it.uiIcon,
+            Mathf.lerp(x + width / 2, x + smallSize/2, prog),
+            Mathf.lerp(y + height / 2, y + smallSize/2, prog),
+            s, s
+          )
+        }
+        center?.also {
+          val s = Mathf.lerp(smallSize, fullSize, prog)
+          Draw.rect(
+            it.uiIcon,
+            Mathf.lerp(x + width - smallSize/2, x + width / 2, prog),
+            Mathf.lerp(y + smallSize/2, y + height / 2, prog),
+            s, s
+          )
+        }
+        next?.also {
+          Draw.rect(
+            it.uiIcon,
+            Mathf.lerp(x + smallSize/2, x + width - smallSize/2, prog),
+            y + smallSize/2,
+            smallSize, smallSize
+          )
+        }
+      }
+      else {
+        val left = blocks[(invPage + 2)%3]
+        val center = blocks[(invPage)%3]
+        val right = blocks[(invPage + 1)%3]
+
+        left?.also { Draw.rect(it.uiIcon, x + smallSize/2, y + smallSize/2, smallSize, smallSize) }
+        center?.also {
+          Draw.rect(
+            it.uiIcon, x + width / 2, y + height / 2,
+            fullSize, fullSize
+          )
+        }
+         right?.also { Draw.rect(it.uiIcon, x + width - smallSize/2, y + smallSize/2, smallSize, smallSize) }
+      }
 
       if (selected) {
         Lines.stroke(Scl.scl(4f), Pal.accent)
         Lines.rect(x, y, width, height)
       }
 
+      if (Core.app.isDesktop) {
+        Fonts.outline.draw(
+          numKey.value,
+          x, y + height - Fonts.outline.capHeight*0.6f,
+          Color.white, 0.6f, true,
+          Align.left
+        )
+      }
+
       Draw.reset()
     }
   }
+}
+
+private class ToolEntry(
+  val icon: Prov<Drawable>,
+  val checked: Boolp?,
+  val hoverTip: Prov<String>?,
+  val listener: Runnable
+) {
+  var shown: Boolean = true
 }
