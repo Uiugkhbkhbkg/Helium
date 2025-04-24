@@ -1,5 +1,5 @@
 {
-  "configVersion": 1,
+  "configVersion": 2,
 
   //=====Debug/调试设置=====//
 
@@ -17,16 +17,25 @@
 
   //启用实体信息显示器
   "enableEntityInfoDisplay": true,
+  //信息显示缩放
+  "entityInfoScale": 1.0,
+  //信息指示器透明度
+  "entityInfoAlpha": 1.0,
   //启用生命值面板
   "enableHealthBarDisplay": true,
   //启用状态指示器
   "enableUnitStatusDisplay": true,
   //启用范围指示器
   "enableRangeDisplay": true,
+  //显示实体攻击范围
+  "showAttackRange": true,
+  //显示修复范围
+  "showHealRange": true,
+  //显示超速投影作用范围
+  "showOverdriveRange": true,
   //实体信息控制热键
   "entityInfoHotKey": "altLeft",
-  //信息显示缩放
-  "entityInfoScale": 1.0,
-  //信息指示器透明度
-  "entityInfoAlpha": 1.0
+
+  //启用更好的放置面板
+  "enableBetterPlacement": true,
 }

@@ -274,6 +274,17 @@ object He {
         "showOverdriveRange",
         config::showOverdriveRange
       ),
+
+      ConfigSepLine(
+        "placement",
+        Core.bundle["settings.basic.placement"],
+        Pal.accent,
+        Pal.accentBack
+      ),
+      ConfigCheck(
+        "enableBetterPlacement",
+        config::enableBetterPlacement
+      ),
     )
     conf.addConfig(
       "debug", HeAssets.program,
