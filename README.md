@@ -46,10 +46,10 @@ Added **_\[Helium Config]_** entry in game settings, providing modular control o
 ### Development Roadmap
 
 Current Priorities:
-- [ ] In-game information panel quick toggle controls
+- [x] In-game information panel quick toggle controls
 - [ ] Enhanced HUD elements (wave info panel, block selection bar)
-- [ ] Improved quick-access item bar with smart recommendations
-- [ ] Standardized quick toolbar for better UI button placement
+- [x] (Partially complete) Improved quick-access item bar with smart recommendations
+- [x] Standardized quick toolbar for better UI button placement
 - [ ] Redesigned mod configuration interface
 
 Future Plans:
