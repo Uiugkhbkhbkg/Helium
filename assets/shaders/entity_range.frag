@@ -1,4 +1,4 @@
-#define HIGH
+#define HIGHP
 
 uniform sampler2D u_texture;
 

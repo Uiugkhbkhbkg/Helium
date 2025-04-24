@@ -13,9 +13,9 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
   companion object {
     private var exec = Threads.unboundedExecutor("HTTP", 1)
     private val commentMatcher = Regex("(//.*)|(/\\*(.|\\s)+\\*/)")
-    private val keyMatcher = Regex("\"?(?<key>\\w+)\"?\\s*:\\s*")
+    private val keyMatcher = Regex("\"?(\\w+)\"?\\s*:\\s*")
     private val jsonArrayMatcher = Regex("\\[(.|\\s)*]")
-    private val jsonObjectMatcher = Regex("\\{(.|\\s)*}")
+    private val jsonObjectMatcher = Regex("\\{(.|\\s)*\\}")
     private val jsonValueMatcher = Regex("(\".*\")|([\\w.]+)")
 
     private val configs = HeConfig::class.java.declaredFields
@@ -185,7 +185,7 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
   ) {
     var lastKeyEnd = 0
     keyMatcher.findAll(subString).forEach pair@{ key ->
-      val keyName = key.groups["key"]!!
+      val keyName = key.groups[1]!!
 
       val perpend = subString.substring(lastKeyEnd, key.range.first)
       stringBuilder.append(perpend)
