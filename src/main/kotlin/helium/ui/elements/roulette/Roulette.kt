@@ -14,7 +14,7 @@ class Roulette(
   private var layers = 0
   private val layerCache = Seq<Strip<*>>()
 
-  fun <E: StripElement> add(elem: E): Strip<E>{
+  fun <E> add(elem: E): Strip<E> where E : Element, E: StripElement{
     val res = Strip(elem)
 
     addChild(elem)

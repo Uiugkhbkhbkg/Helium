@@ -8,14 +8,16 @@ import arc.math.Interp
 import arc.math.Mathf
 import arc.math.geom.Geometry
 import arc.math.geom.Rect
-import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
 import arc.struct.Bits
-import arc.util.Align
+import arc.util.Scaling
 import arc.util.Time
 import arc.util.Tmp
 import helium.He
 import helium.graphics.DrawUtils
 import helium.graphics.HeShaders.entityRangeRenderer
+import helium.ui.fragments.entityinfo.ConfigPair
+import helium.ui.fragments.entityinfo.ConfigurableDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
 import mindustry.game.Team
@@ -23,7 +25,7 @@ import mindustry.gen.*
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.logic.Ranged
-import mindustry.ui.Fonts
+import mindustry.ui.Styles
 import mindustry.world.blocks.defense.ForceProjector.ForceBuild
 import mindustry.world.blocks.defense.MendProjector.MendBuild
 import mindustry.world.blocks.defense.OverdriveProjector.OverdriveBuild
@@ -109,7 +111,7 @@ class EntityRangeModel: Model<Ranged> {
   }
 }
 
-class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeModel) {
+class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeModel), ConfigurableDisplay {
   companion object {
     private var coneDrawing = false
 
@@ -137,21 +139,29 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     it.enableRangeDisplay && (it.showAttackRange || it.showHealRange || it.showOverdriveRange)
   }
 
-  override fun drawConfig(centX: Float, centerY: Float) {
-    val size = Scl.scl(64f)
-    val off = Scl.scl(16f)
-    Icon.zoom.draw(
-      centX - size/2f, centerY - size/2f + off,
-      size, size,
-    )
-
-    Fonts.outline.draw(
-      Core.bundle["infos.entityRange"],
-      centX, centerY - off,
-      Color.white, 0.9f, true,
-      Align.center
-    )
+  override fun buildConfig(table: Table) {
+    table.image(Icon.diagonal).size(64f).scaling(Scaling.fit)
+    table.row()
+    table.add(Core.bundle["infos.entityRange"], Styles.outlineLabel)
   }
+
+  override fun getConfigures() = listOf(
+    ConfigPair(
+      "showAttackRange",
+      Icon.turret,
+      He.config::showAttackRange
+    ),
+    ConfigPair(
+      "showHealRange",
+      Icon.defense,
+      He.config::showHealRange
+    ),
+    ConfigPair(
+      "showOverdriveRange",
+      Icon.upOpen,
+      He.config::showOverdriveRange
+    )
+  )
 
   override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (range*2).let { clipSize ->
     worldViewport.overlaps(

@@ -1,21 +1,39 @@
 package helium.ui.elements.roulette
 
-import arc.scene.Element
+interface StripElement{
+  var centerX: Float
+  var centerY: Float
 
-open class StripElement: Element(){
-  var centerX = 0f
-  var centerY = 0f
+  var angleDelta: Float
+  var stripWidth: Float
 
-  var angleDelta = 0f
-  var stripWidth = 0f
+  var angle: Float
+  var distance: Float
 
-  var angle = 0f
-  var distance = 0f
+  fun setRange(angleDelta: Float, stripWidth: Float): StripElement {
+    this.angleDelta = angleDelta
+    this.stripWidth = stripWidth
+    return this
+  }
 
-  open val minAngleDelta get() = prefAngleDelta
-  open val minStripWidth get() = prefStripWidth
-  open val prefAngleDelta get() = 0f
-  open val prefStripWidth get() = 0f
-  open val maxAngleDelta get() = 0f
-  open val maxStripWidth get() = 0f
+  fun setCPosition(angle: Float, distance: Float): StripElement {
+    this.angle = angle
+    this.distance = distance
+    return this
+  }
+
+  fun setCBounds(angle: Float, distance: Float, angleDelta: Float, stripWidth: Float): StripElement {
+    this.angle = angle
+    this.distance = distance
+    this.angleDelta = angleDelta
+    this.stripWidth = stripWidth
+    return this
+  }
+
+  val minAngleDelta get() = prefAngleDelta
+  val minStripWidth get() = prefStripWidth
+  val prefAngleDelta get() = 0f
+  val prefStripWidth get() = 0f
+  val maxAngleDelta get() = 0f
+  val maxStripWidth get() = 0f
 }

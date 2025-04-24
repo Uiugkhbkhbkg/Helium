@@ -1,14 +1,12 @@
 package helium.ui.fragments.entityinfo.displays
 
 import arc.Core
-import arc.graphics.Color
 import arc.math.Interp
 import arc.math.Mathf
 import arc.scene.Element
-import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
 import arc.struct.Bits
-import arc.util.Align
+import arc.util.Scaling
 import helium.ui.HeAssets
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.InputCheckerModel
@@ -18,7 +16,7 @@ import mindustry.gen.Icon
 import mindustry.gen.Posc
 import mindustry.gen.Teamc
 import mindustry.ui.Displayable
-import mindustry.ui.Fonts
+import mindustry.ui.Styles
 
 class DetailsModel: InputCheckerModel<Displayable> {
   override lateinit var element: Element
@@ -62,20 +60,11 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
 
   override fun valid(entity: Posc) = entity is Displayable
   override fun enabled() = true
-  override fun drawConfig(centX: Float, centerY: Float) {
-    val size = Scl.scl(64f)
-    val off = Scl.scl(16f)
-    Icon.menu.draw(
-      centX - size/2f, centerY - size/2f + off,
-      size, size,
-    )
 
-    Fonts.outline.draw(
-      Core.bundle["infos.entityDetails"],
-      centX, centerY - off,
-     Color.white, 0.9f, true,
-     Align.center
-    )
+  override fun buildConfig(table: Table) {
+    table.image(Icon.menu).size(64f).scaling(Scaling.fit)
+    table.row()
+    table.add(Core.bundle["infos.entityDetails"], Styles.outlineLabel)
   }
 
   override fun DetailsModel?.checkHovering(isHovered: Boolean): Boolean {

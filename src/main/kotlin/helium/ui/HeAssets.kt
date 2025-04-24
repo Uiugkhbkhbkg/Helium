@@ -3,8 +3,12 @@ package helium.ui
 import arc.graphics.Color
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
+import arc.scene.ui.layout.Scl
 import arc.util.Tmp
 import helium.Helium
+import helium.graphics.EdgeLineStripDrawable
+import helium.graphics.FillStripDrawable
+import helium.graphics.StripDrawable
 import mindustry.gen.Tex
 import mindustry.graphics.Pal
 
@@ -21,6 +25,11 @@ object HeAssets {
   lateinit var darkGrayUIAlpha: Drawable
   lateinit var padGrayUIAlpha: Drawable
   lateinit var slotsBack: Drawable
+
+  lateinit var whiteStrip: StripDrawable
+  lateinit var whiteEdge: StripDrawable
+  lateinit var innerLight: StripDrawable
+  lateinit var outerLight: StripDrawable
 
   fun load(){
     heIcon = Helium.getDrawable("helium")
@@ -40,5 +49,10 @@ object HeAssets {
       it.topHeight = 8f
       it.bottomHeight = 8f
     }
+
+    whiteStrip = FillStripDrawable(Color.white)
+    whiteEdge = EdgeLineStripDrawable(Scl.scl(3f), Color.white)
+    innerLight = FillStripDrawable(Color.white.cpy().a(0f), Color.white)
+    outerLight = FillStripDrawable(Color.white, Color.white.cpy().a(0f))
   }
 }

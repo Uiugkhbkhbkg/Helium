@@ -76,6 +76,7 @@ object DrawUtils {
   private val v2 = Vec2()
   private val v3 = Vec2()
   private val v4 = Vec2()
+  private val v5 = Vec2()
 
   fun fillCircle(x: Float, y: Float, radius: Float, level: Int = 2){
     val color = Draw.getColorPacked()
@@ -316,17 +317,50 @@ object DrawUtils {
 
   fun circleFrame(
     x: Float, y: Float, innerRadius: Float, radius: Float,
-    angle: Float, rotate: Float = 0f, sides: Int = 72
+    angle: Float, rotate: Float = 0f, sides: Int = 72,
+    padCap: Boolean = false,
   ){
     val offX1 = Mathf.cosDeg(rotate)
     val offY1 = Mathf.sinDeg(rotate)
     val offX2 = Mathf.cosDeg(rotate + angle)
     val offY2 = Mathf.sinDeg(rotate + angle)
 
-    val inner1 = v1.set(offX1, offY1).scl(innerRadius).add(x, y)
-    val inner2 = v2.set(offX2, offY2).scl(innerRadius).add(x, y)
-    val out1 =  v3.set(offX1, offY1).scl(radius).add(x, y)
-    val out2 = v4.set(offX2, offY2).scl(radius).add(x, y)
+    var inner1: Vec2
+    var inner2: Vec2
+    var out1: Vec2
+    var out2: Vec2
+
+    if (padCap) {
+      val off = Lines.getStroke()/2f
+      v5.set(off, off).rotate(rotate)
+      inner1 = v1.set(offX1, offY1).scl(innerRadius).add(v5).add(x, y)
+      v5.set(-off, off).rotate(rotate)
+      out1 = v3.set(offX1, offY1).scl(radius).add(v5).add(x, y)
+      v5.set(off, -off).rotate(rotate + angle)
+      inner2 = v2.set(offX2, offY2).scl(innerRadius).add(v5).add(x, y)
+      v5.set(-off, -off).rotate(rotate + angle)
+      out2 = v4.set(offX2, offY2).scl(radius).add(v5).add(x, y)
+
+      Lines.arc(
+        x, y, innerRadius + off, angle/360f, rotate, sides
+      )
+      Lines.arc(
+        x, y, radius - off, angle/360f, rotate, sides
+      )
+    }
+    else {
+      inner1 = v1.set(offX1, offY1).scl(innerRadius).add(x, y)
+      inner2 = v2.set(offX2, offY2).scl(innerRadius).add(x, y)
+      out1 = v3.set(offX1, offY1).scl(radius).add(x, y)
+      out2 = v4.set(offX2, offY2).scl(radius).add(x, y)
+
+      Lines.arc(
+        x, y, innerRadius, angle/360f, rotate, sides
+      )
+      Lines.arc(
+        x, y, radius, angle/360f, rotate, sides
+      )
+    }
 
     Lines.line(
       inner1.x, inner1.y,
@@ -335,12 +369,6 @@ object DrawUtils {
     Lines.line(
       inner2.x, inner2.y,
       out2.x, out2.y,
-    )
-    Lines.arc(
-      x, y, innerRadius, angle/360f, rotate, sides
-    )
-    Lines.arc(
-      x, y, radius, angle/360f, rotate, sides
     )
   }
 

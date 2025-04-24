@@ -5,9 +5,11 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
 import arc.struct.Bits
 import arc.struct.Seq
 import arc.util.Align
+import arc.util.Scaling
 import arc.util.Tmp
 import helium.He
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
@@ -20,6 +22,7 @@ import mindustry.gen.Statusc
 import mindustry.graphics.Pal
 import mindustry.type.StatusEffect
 import mindustry.ui.Fonts
+import mindustry.ui.Styles
 import kotlin.math.max
 
 private val iconSize = Scl.scl(26f)
@@ -53,24 +56,14 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
   override fun valid(entity: Posc) = entity is Statusc
   override fun enabled() = He.config.enableUnitStatusDisplay
 
-  override fun StatusModel.shouldDisplay(): Boolean {
-    return statusList.any()
+  override fun buildConfig(table: Table) {
+    table.image(Icon.layers).size(64f).scaling(Scaling.fit)
+    table.row()
+    table.add(Core.bundle["infos.statusDisplay"], Styles.outlineLabel)
   }
 
-  override fun drawConfig(centX: Float, centerY: Float) {
-    val size = Scl.scl(64f)
-    val off = Scl.scl(16f)
-    Icon.effect.draw(
-      centX - size/2f, centerY - size/2f + off,
-      size, size,
-    )
-
-    Fonts.outline.draw(
-      Core.bundle["infos.statusDisplay"],
-      centX, centerY - off,
-      Color.white, 0.9f, true,
-      Align.center
-    )
+  override fun StatusModel.shouldDisplay(): Boolean {
+    return statusList.any()
   }
 
   override fun StatusModel.realHeight(prefSize: Float): Float{

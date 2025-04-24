@@ -4,10 +4,14 @@ import arc.Core
 import arc.Events
 import arc.Settings
 import arc.files.Fi
-import arc.func.Boolf
+import arc.func.*
 import arc.scene.Element
 import arc.scene.event.SceneEvent
 import arc.scene.ui.layout.Table
+import arc.struct.IntMap
+import arc.struct.ObjectFloatMap
+import arc.struct.ObjectIntMap
+import arc.struct.ObjectMap
 import arc.util.Log
 import arc.util.Strings
 import helium.graphics.HeShaders
@@ -232,6 +236,16 @@ object He {
         Pal.accent,
         Pal.accentBack
       ),
+      ConfigSlider(
+        "entityInfoScale",
+        config::entityInfoScale,
+        0.5f, 2f, 0.1f
+      ),
+      ConfigSlider(
+        "entityInfoAlpha",
+        config::entityInfoAlpha,
+        0.4f, 1f, 0.05f
+      ),
       ConfigCheck(
         "enableEntityInfoDisplay",
         config::enableEntityInfoDisplay
@@ -248,15 +262,17 @@ object He {
         "enableRangeDisplay",
         config::enableRangeDisplay
       ),
-      ConfigSlider(
-        "entityInfoScale",
-        config::entityInfoScale,
-        0.5f, 2f, 0.1f
+      ConfigCheck(
+        "showAttackRange",
+        config::showAttackRange
       ),
-      ConfigSlider(
-        "entityInfoAlpha",
-        config::entityInfoAlpha,
-        0.4f, 1f, 0.05f
+      ConfigCheck(
+        "showHealRange",
+        config::showHealRange
+      ),
+      ConfigCheck(
+        "showOverdriveRange",
+        config::showOverdriveRange
       ),
     )
     conf.addConfig(
@@ -286,3 +302,20 @@ fun Element.addEventBlocker(
     false
   }
 }
+
+operator fun <K> ObjectIntMap<K>.set(key: K, value: Int) = put(key, value)
+operator fun <K> ObjectFloatMap<K>.set(key: K, value: Float) = put(key, value)
+
+operator fun <V> IntMap<V>.set(key: Int, value: V): V = put(key, value)
+
+operator fun <K, V> ObjectMap<K, V>.set(key: K, value: V): V = put(key, value)
+
+operator fun <P> Cons<P>.invoke(p: P) = get(p)
+operator fun <P1, P2> Cons2<P1, P2>.invoke(p1: P1, p2: P2) = get(p1, p2)
+operator fun <P1, P2, P3> Cons3<P1, P2, P3>.invoke(p1: P1, p2: P2, p3: P3) = get(p1, p2, p3)
+operator fun <P1, P2, P3, P4> Cons4<P1, P2, P3, P4>.invoke(p1: P1, p2: P2, p3: P3, p4: P4) = get(p1, p2, p3, p4)
+operator fun <P, R> Func<P, R>.invoke(p: P): R = get(p)
+operator fun <P1, P2, R> Func2<P1, P2, R>.invoke(p1: P1, p2: P2): R = get(p1, p2)
+operator fun <P1, P2, P3, R> Func3<P1, P2, P3, R>.invoke(p1: P1, p2: P2, p3: P3): R = get(p1, p2, p3)
+operator fun <R> Prov<R>.invoke(): R = get()
+operator fun <P, T: Throwable> ConsT<P, T>.invoke(p: P) = get(p)

@@ -20,8 +20,6 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
 
     private val configs = HeConfig::class.java.declaredFields
       .filter { it.getAnnotation(ConfigItem::class.java) != null }
-
-    private var saving = false
   }
 
   private val configFile = configDir.child("mod_config.hjson")
@@ -43,11 +41,8 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
   @ConfigItem var enableRangeDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showAttackRange = true
-    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showHealRange = true
-    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showOverdriveRange = true
-    set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var entityInfoHotKey = KeyCode.altLeft
   @ConfigItem var entityInfoScale = 1f
   @ConfigItem var entityInfoAlpha = 1f
@@ -127,21 +122,18 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     return !old
   }
 
-  fun saveAsync(force: Boolean = false) {
-    if (!force && saving) return
+  fun saveAsync() {
     exec.submit {
-      save()
+      synchronized(this, ::save)
     }
   }
 
   fun save() {
-    saving = true
     try {
       save(configFile)
     } catch (e: IOException) {
       Log.err(e.toString())
     }
-    saving = false
   }
 
   @Suppress("UNCHECKED_CAST")

@@ -3,6 +3,7 @@ package helium.ui.fragments.entityinfo
 import arc.func.Prov
 import arc.math.geom.Rect
 import arc.scene.Element
+import arc.scene.ui.layout.Table
 import arc.struct.Bits
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
@@ -30,7 +31,7 @@ abstract class EntityInfoDisplay<M: Model<*>>(
   abstract fun valid(entity: Posc): Boolean
   abstract fun enabled(): Boolean
 
-  abstract fun drawConfig(centX: Float, centerY: Float)
+  abstract fun buildConfig(table: Table)
 
   open fun M?.checkHovering(isHovered: Boolean) = isHovered
   open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {

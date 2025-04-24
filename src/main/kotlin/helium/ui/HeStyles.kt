@@ -7,11 +7,11 @@ import arc.scene.style.Drawable
 import arc.scene.style.NinePatchDrawable
 import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.Dialog.DialogStyle
+import arc.scene.ui.layout.Scl
 import helium.Helium
-import helium.graphics.Blur
-import helium.graphics.DEf_B
-import helium.graphics.ScaledNinePatchClipDrawable
+import helium.graphics.*
 import helium.ui.HeAssets.transparent
+import helium.ui.elements.roulette.StripButtonStyle
 import helium.ui.fragments.entityinfo.displays.HealthBarStyle
 import mindustry.game.EventType
 import mindustry.graphics.Pal
@@ -21,9 +21,35 @@ import mindustry.ui.Styles
 object HeStyles {
   lateinit var BLUR_BACK: Drawable
 
+  lateinit var none: StripDrawable
+  lateinit var black: StripDrawable
+  lateinit var black9: StripDrawable
+  lateinit var black8: StripDrawable
+  lateinit var black7: StripDrawable
+  lateinit var black6: StripDrawable
+  lateinit var black5: StripDrawable
+  lateinit var boundBlack: StripDrawable
+  lateinit var boundBlack9: StripDrawable
+  lateinit var boundBlack8: StripDrawable
+  lateinit var boundBlack7: StripDrawable
+  lateinit var boundBlack6: StripDrawable
+  lateinit var boundBlack5: StripDrawable
+  lateinit var grayPanel: StripDrawable
+  lateinit var flatOver: StripDrawable
+  lateinit var edgeFlatOver: StripDrawable
+  lateinit var flatDown: StripDrawable
+  lateinit var clearEdge: StripDrawable
+  lateinit var accent: StripDrawable
+
   lateinit var transparentBack: DialogStyle
 
   lateinit var test: HealthBarStyle
+
+  lateinit var clearS: StripButtonStyle
+  lateinit var toggleClearS: StripButtonStyle
+  lateinit var boundClearS: StripButtonStyle
+  lateinit var flatS: StripButtonStyle
+  lateinit var grayS: StripButtonStyle
 
   var uiBlur: Blur = Blur(*DEf_B)
 
@@ -48,7 +74,7 @@ object HeStyles {
         x: Float, y: Float, originX: Float, originY: Float,
         width: Float, height: Float,
         scaleX: Float, scaleY: Float,
-        rotation: Float
+        rotation: Float,
       ) {
         drawingCounter++
         if (drawingCounter == lastDialogs) uiBlur.directDraw {
@@ -63,6 +89,26 @@ object HeStyles {
         Styles.black5.draw(x, y, originX, originY, width, height, scaleX, scaleY, rotation)
       }
     }
+
+    none = FillStripDrawable(Color.clear)
+    black = FillStripDrawable(Color.black)
+    black9 = FillStripDrawable(Color.black.cpy().a(0.9f))
+    black8 = FillStripDrawable(Color.black.cpy().a(0.8f))
+    black7 = FillStripDrawable(Color.black.cpy().a(0.6f))
+    black6 = FillStripDrawable(Color.black.cpy().a(0.5f))
+    black5 = FillStripDrawable(Color.black.cpy().a(0.3f))
+    boundBlack = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black)
+    boundBlack9 = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black.cpy().a(0.9f))
+    boundBlack8 = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black.cpy().a(0.8f))
+    boundBlack7 = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black.cpy().a(0.6f))
+    boundBlack6 = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black.cpy().a(0.5f))
+    boundBlack5 = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.black.cpy().a(0.3f))
+    grayPanel = FillStripDrawable(Pal.darkestGray)
+    flatOver = FillStripDrawable(Color.valueOf("454545").a(0.6f))
+    flatDown = EdgeLineStripDrawable(Scl.scl(3f), Pal.accent)
+    edgeFlatOver = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray, Color.valueOf("454545"))
+    clearEdge = EdgeLineStripDrawable(Scl.scl(3f), Pal.darkestGray)
+    accent = FillStripDrawable(Pal.accent)
 
     transparentBack = object : DialogStyle() {
       init {
@@ -87,6 +133,34 @@ object HeStyles {
       texOffY = 7,
       shieldsOffX = 15,
       shieldsOffY = 7
+    )
+
+    flatS = StripButtonStyle(
+      over = flatOver,
+      down = flatOver,
+      up = black,
+    )
+    grayS = StripButtonStyle(
+      over = flatOver,
+      down = flatOver,
+      up = grayPanel,
+    )
+    clearS = StripButtonStyle(
+      down = flatDown,
+      up = none,
+      over = flatOver,
+    )
+    toggleClearS = StripButtonStyle(
+      down = flatDown,
+      up = none,
+      over = flatOver,
+      checked = flatDown,
+      checkedOver = EdgeLineStripDrawable(Scl.scl(3f), Pal.accent, Color.valueOf("454545").a(0.6f)),
+    )
+    boundClearS = StripButtonStyle(
+      down = flatDown,
+      up = clearEdge,
+      over = edgeFlatOver,
     )
   }
 }

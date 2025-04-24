@@ -561,6 +561,13 @@ class HePlacementFrag {
             rebuildCategory()
           }.group(group).update { i -> i.setChecked(currentCategory == cat) }.name("category-" + cat.name)
         }
+      }.update { pane ->
+        if (pane.hasScroll()) {
+          val result = Core.scene.hoverElement
+          if (result == null || !result.isDescendantOf(pane)) {
+            Core.scene.setScrollFocus(null)
+          }
+        }
       }.fill().maxHeight(5*48f)
     }.growY().top().touchable(Touchable.enabled)
 

@@ -9,8 +9,10 @@ import arc.graphics.g2d.GlyphLayout
 import arc.math.Mat
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
 import arc.struct.Bits
 import arc.util.Align
+import arc.util.Scaling
 import arc.util.Tmp.c1
 import helium.He
 import helium.graphics.ClipDrawable
@@ -23,6 +25,7 @@ import mindustry.core.UI
 import mindustry.gen.*
 import mindustry.graphics.Pal
 import mindustry.ui.Fonts
+import mindustry.ui.Styles
 import kotlin.math.max
 
 class HealthModel: Model<Healthc>{
@@ -89,20 +92,10 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   }
   override val HealthModel.prefHeight: Float get() = style.height
 
-  override fun drawConfig(centX: Float, centerY: Float) {
-    val size = Scl.scl(64f)
-    val off = Scl.scl(16f)
-    Icon.add.draw(
-      centX - size/2f, centerY - size/2f + off,
-      size, size,
-    )
-
-    Fonts.outline.draw(
-      Core.bundle["infos.healthDisplay"],
-      centX, centerY - off,
-      Color.white, 0.9f, true,
-      Align.center
-    )
+  override fun buildConfig(table: Table) {
+    table.image(Icon.add).size(64f).scaling(Scaling.fit)
+    table.row()
+    table.add(Core.bundle["infos.healthDisplay"], Styles.outlineLabel)
   }
 
   override fun HealthModel?.checkHovering(isHovered: Boolean): Boolean {

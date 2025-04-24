@@ -5,29 +5,35 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
-import arc.math.Angles
 import arc.math.Mathf
 import arc.math.geom.Geometry
 import arc.math.geom.Rect
 import arc.math.geom.Vec2
-import arc.scene.Element
 import arc.scene.Group
-import arc.scene.event.ClickListener
-import arc.scene.event.InputEvent
 import arc.scene.event.Touchable
+import arc.scene.ui.Label
 import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Stack
 import arc.scene.ui.layout.Table
 import arc.struct.*
-import arc.util.Align
+import arc.util.Scaling
 import arc.util.Time
 import arc.util.Tmp
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
+import helium.He
 import helium.He.config
 import helium.addEventBlocker
-import helium.graphics.DrawUtils
+import helium.graphics.EdgeLineStripDrawable
+import helium.graphics.FillStripDrawable
+import helium.ui.HeAssets
+import helium.ui.HeStyles
+import helium.ui.elements.roulette.StripButton
+import helium.ui.elements.roulette.StripButtonStyle
+import helium.ui.elements.roulette.StripWrap
 import helium.ui.fragments.entityinfo.Side.*
 import helium.util.MutablePair
+import helium.util.accessField
 import helium.util.mto
 import mindustry.Vars
 import mindustry.game.Team
@@ -37,7 +43,8 @@ import mindustry.graphics.Drawf
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.input.Binding
-import mindustry.ui.Fonts
+import mindustry.ui.Styles
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -45,6 +52,25 @@ import kotlin.math.min
 class EntityInfoFrag {
   companion object {
     private val tempEntry = EntityEntry()
+
+    private val outerStyle = HeStyles.clearS.copyWith(
+      over = FillStripDrawable (
+        Pal.accent.cpy().a(0.7f),
+        Pal.accent.cpy().a(0f)
+      ),
+      down = EdgeLineStripDrawable (
+        Scl.scl(2f),
+        Pal.accent,
+        Pal.accent.cpy().a(0.7f),
+        Pal.accent.cpy().a(0f)
+      ),
+      checked = FillStripDrawable(
+        Pal.accent.cpy(),
+        Pal.accent.cpy().a(0f)
+      )
+    )
+
+    private val Bits.bits: LongArray by accessField("bits")
   }
 
   var controlling = false
@@ -119,6 +145,7 @@ class EntityInfoFrag {
 
   fun toggleSwitchConfig() {
     if (configPane.visible) {
+      config.saveAsync()
       configPane.visible = false
     }
     else {
@@ -127,190 +154,222 @@ class EntityInfoFrag {
     }
   }
 
+  private fun buildTeamStyle(team: Team): StripButtonStyle {
+    val overColor = team.color.cpy().lerp(Color.white, 0.4f)
+    return StripButtonStyle(
+      up = FillStripDrawable(team.color.cpy().a(0.7f)),
+      over = EdgeLineStripDrawable(
+        Scl.scl(3f),
+        Color.lightGray,
+        overColor
+      ),
+      down = EdgeLineStripDrawable(
+        Scl.scl(3f),
+        Color.white,
+        overColor
+      ),
+      checked = EdgeLineStripDrawable(
+        Scl.scl(3f),
+        Pal.accent.cpy().lerp(Color.white, 0.4f),
+        team.color
+      ),
+      checkedOver = EdgeLineStripDrawable(
+        Scl.scl(3f),
+        Pal.accent.cpy().lerp(Color.white, 0.4f),
+        overColor
+      ),
+      disabled = FillStripDrawable(
+        team.color.cpy().a(0.7f)
+      )
+    )
+  }
+
   private fun buildConfig(table: Table) {
     table.clearChildren()
 
+    var current: EntityInfoDisplay<*>? = null
     val teams = Vars.state.teams.active
-    table.add(object: Element(){
-      var current: EntityInfoDisplay<*>? = null
-      var hovering: Any? = null
+    val stack = Stack()
 
-      init {
-        touchable = Touchable.enabled
-        addListener(object: ClickListener(){
-          override fun mouseMoved(event: InputEvent, x: Float, y: Float): Boolean {
-            val offX = x - width/2f
-            val offY = y - height/2f
+    val radius = min(min(Core.graphics.width, Core.graphics.height)/2f - Scl.scl(40f), Scl.scl(340f))
+    val r1 = radius/2.8f
+    val r2 = radius/1.75f
+    val r3 = radius
+    val r4 = radius*1.32f
+    val off = Scl.scl(3f)
 
-            val angle = Angles.angle(offX, offY)
-            val distance = Mathf.dst(offX, offY)
+    stack.add(StripWrap(background = HeStyles.black5).also {
+      it.setCBounds(
+        0f, 0f,
+        360f, radius
+      )
+      it.addEventBlocker()
+    })
 
-            val r1 = width/6f
-            val r2 = width/3.5f
-            val r3 = width/2f
-
-            hovering = null
-
-            if (current != null) {
-              val teamBaseAng = 120f
-              val teamItemWidth = 300f/teams.size
-              teams.forEachIndexed { i, t ->
-                val offAng = teamBaseAng + i*teamItemWidth + teamItemWidth/2f
-
-                if (distance > r1 && distance < r2 && Angles.near(angle, offAng, teamItemWidth/2f)) {
-                  hovering = t.team
-                }
-              }
-            }
-
-            val displayBaseAng = 90f
-            val displayItemDelta = 360f/displays.size
-            displays.forEachIndexed { i, dis ->
-              val offAng = displayBaseAng + i*displayItemDelta + displayItemDelta/2f
-
-              if (distance > r2 && distance < r3 && Angles.near(angle, offAng, displayItemDelta/2f)) {
-                hovering = dis
-              }
-            }
-
-            return true
-          }
-
-          override fun clicked(event: InputEvent, x: Float, y: Float) {
-            super.clicked(event, x, y)
-
-            if (hovering == null){
-              toggleSwitchConfig()
-              return
-            }
-
-            hovering?.also { when(it) {
-              is EntityInfoDisplay<*> -> current = it
-              is Team -> current?.also { dis -> disabledTeams[dis].flip(it.id) }
-            } }
-          }
-        })
-
-        addEventBlocker()
+    stack.add(StripButton(HeStyles.clearS){
+      it.image(Icon.none).size(42f).scaling(Scaling.fit)
+      it.row()
+      it.add(Core.bundle["infos.disableAll"], Styles.outlineLabel, 0.75f)
+    }.also {
+      it.setCBounds(
+        90f, 0f,
+        120f, r1 - off
+      )
+      it.clicked { disabledTeams.values().forEach { bits -> Arrays.fill(bits.bits, -0x1L) } }
+      it.addEventBlocker()
+    })
+    stack.add(StripButton(HeStyles.clearS){
+      it.image(Icon.filters).size(42f).scaling(Scaling.fit)
+      it.row()
+      it.add(Core.bundle["infos.allSetting"], Styles.outlineLabel, 0.75f)
+    }.also {
+      it.setCBounds(
+        210f, 0f,
+        120f, r1 - off
+      )
+      it.clicked { He.configDialog.show("entityInfo") }
+    })
+    stack.add(StripButton(HeStyles.clearS){
+      it.image(Icon.effect).size(42f).scaling(Scaling.fit)
+      it.row()
+      it.add(Core.bundle["infos.enableAll"], Styles.outlineLabel, 0.75f)
+    }.also {
+      it.setCBounds(
+        330f, 0f,
+        120f, r1 - off
+      )
+      it.clicked {
+        disabledTeams.values().forEach { bits -> Arrays.fill(bits.bits, 0) }
       }
+      it.addEventBlocker()
+    })
+    stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+      it.setColor(Pal.darkestGray)
+      it.setCBounds(
+        90f, 0f,
+        0f, r1 - off
+      )
+    })
+    stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+      it.setColor(Pal.darkestGray)
+      it.setCBounds(
+        210f, 0f,
+        0f, r1 - off
+      )
+    })
+    stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+      it.setColor(Pal.darkestGray)
+      it.setCBounds(
+        330f, 0f,
+        0f, r1 - off
+      )
+    })
 
-      override fun draw() {
-        validate()
+    stack.add(StripWrap(background = HeStyles.boundBlack).also {
+      it.setColor(Pal.darkestGray)
+      it.setCBounds(
+        0f, r1 - off/2f,
+        360f, 0f
+      )
+    })
 
-        val centX = x + width/2f
-        val centY = y + height/2f
-
-        val r1 = width/6f
-        val r2 = width/3.5f
-        val r3 = width/2f
-
-        Draw.color(Color.darkGray, 0.5f)
-        Fill.circle(centX, centY, r1)
-
-        Draw.color(Color.darkGray, 0.8f)
-        DrawUtils.circleStrip(
-          centX, centY,
-          r1, r2,
-          60f, 60f
+    stack.add(StripWrap(
+      Label(Core.bundle["infos.enabledTeams"], Styles.outlineLabel).also { it.setFontScale(0.85f) },
+      HeStyles.boundBlack5
+    ).also {
+      it.setCBounds(
+        60f, r1,
+        60f, r2 - r1
+      )
+    })
+    val teamButtonDelta = 300f/teams.size
+    teams.forEachIndexed { i, team ->
+      stack.add(StripButton(
+        buildTeamStyle(team.team),
+        Label(team.team.emoji, Styles.outlineLabel).also { it.setFontScale(2f) }
+      ).also {
+        it.setCBounds(
+          120f + teamButtonDelta*i, r1,
+          teamButtonDelta, r2 - r1
         )
+        it.setDisabled { current == null }
+        it.update { it.isChecked = current?.let { dis -> !disabledTeams[dis].get(team.team.id) }?: false }
+        it.clicked { disabledTeams[current!!].flip(team.team.id) }
+        it.addEventBlocker()
+      })
+    }
 
-        DrawUtils.innerCircle(
-          centX, centY, r2, r3,
-          Tmp.c1.set(Color.darkGray).a(0.6f), Tmp.c1, 3
+    stack.add(StripWrap(background = HeStyles.boundBlack).also {
+      it.setCBounds(
+        0f, r2 + off/2f,
+        360f, 0f
+      )
+    })
+
+    val displayButtonDelta = 360f/displays.size
+    displays.forEachIndexed{ i, dis ->
+      stack.add(StripButton(outerStyle){ dis.buildConfig(it) }.also {
+        it.setCBounds(
+          90f + displayButtonDelta*i, r2 + off,
+          displayButtonDelta, r3 - r2 - off
         )
-
-        val teamBaseAng = 120f
-        val teamItemWidth = 300f/teams.size
-        teams.forEachIndexed { i, t ->
-          val light = hovering == t.team
-          Draw.color(t.team.color, Color.white, if (light) 0.5f else 0f)
-          Draw.alpha(0.8f)
-          DrawUtils.circleStrip(
-            centX, centY,
-            r1, r2,
-            teamItemWidth,
-            teamBaseAng + i*teamItemWidth
+        it.update { it.isChecked = current == dis }
+        it.clicked { current = dis }
+        it.addEventBlocker()
+      })
+      if (dis is ConfigurableDisplay){
+        stack.add(StripWrap(background = HeStyles.black5).also {
+          it.setCBounds(
+            90f + displayButtonDelta*i, r3 + off,
+            displayButtonDelta, r4 - r3 - off
           )
-        }
-
-        Lines.stroke(Scl.scl(3f), Pal.darkerGray)
-        Lines.circle(centX, centY, r1)
-        Lines.circle(centX, centY, r2)
-        DrawUtils.drawLinesRadio(
-          centX, centY,
-          0f, r1,
-          3, 90f
-        )
-        DrawUtils.drawLinesRadio(
-          centX, centY,
-          r1, r2,
-          teams.size, 120f,
-          300f, true
-        )
-        DrawUtils.drawLinesRadio(
-          centX, centY,
-          r2, r3,
-          displays.size, 90f
-        )
-
-        Lines.stroke(Scl.scl(4f), Pal.accent)
-        teams.forEachIndexed { i, t ->
-          current?.also { dis ->
-            val disabled = disabledTeams[dis]
-
-            if (!disabled.get(t.team.id)) {
-              DrawUtils.circleFrame(
-                centX, centY,
-                r1, r2,
-                teamItemWidth,
-                teamBaseAng + i*teamItemWidth
+        })
+        dis.getConfigures().also { list ->
+          val configButtonDelta = displayButtonDelta/list.size
+          stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+            it.setColor(Pal.darkestGray)
+            it.setCBounds(
+              90f + displayButtonDelta*(i + 1), r3 + off,
+              0f, r4 - r3 - off
+            )
+          })
+          list.forEachIndexed { ci, conf ->
+            stack.add(StripButton(HeStyles.toggleClearS){ conf.build(it) }.also {
+              it.setCBounds(
+                90f + displayButtonDelta*i + configButtonDelta*ci, r3 + off,
+                configButtonDelta, r4 - r3 - off
               )
-            }
+              conf.checked?.also { ch -> it.update { it.isChecked = ch.get() } }
+              it.clicked { conf.callback.run() }
+              it.addEventBlocker()
+            })
+            stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+              it.setColor(Pal.darkestGray)
+              it.setCBounds(
+                90f + displayButtonDelta*i + configButtonDelta*ci, r3 + off,
+                0f, r4 - r3 - off
+              )
+            })
           }
-        }
-
-        Fonts.outline.draw(
-          Core.bundle["infos.enabledTeams"],
-          centX, centY + (r1 + r2)/2f,
-          Color.white, 0.85f, true,
-          Align.center
-        )
-
-        val displayBaseAng = 90f
-        val displayItemDelta = 360f/displays.size
-        val radOff = (r2 + r3)/2f
-        displays.forEachIndexed { i, dis ->
-          val angle = displayBaseAng + i*displayItemDelta + displayItemDelta/2f
-
-          val dx = centX + radOff*Mathf.cosDeg(angle)
-          val dy = centY + radOff*Mathf.sinDeg(angle)
-
-          if (current == dis) {
-            DrawUtils.circleStrip(
-              centX, centY,
-              r2, r3,
-              displayItemDelta,
-              displayBaseAng + i*displayItemDelta,
-              Tmp.c1.set(Pal.accent).a(0f),
-              Tmp.c2.set(Tmp.c1).a(0.8f)
+          stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+            it.setColor(Pal.darkestGray)
+            it.setCBounds(
+              90f + displayButtonDelta*i, r3 + off/2f,
+              displayButtonDelta, 0f
             )
-          }
-          else if (hovering == dis) {
-            DrawUtils.circleStrip(
-              centX, centY,
-              r2, r3,
-              displayItemDelta,
-              displayBaseAng + i*displayItemDelta,
-              Tmp.c1.set(Pal.accent).a(0f),
-              Tmp.c2.set(Tmp.c1).a(0.4f + Mathf.absin(6f, 0.2f))
-            )
-          }
-
-          Draw.reset()
-          dis.drawConfig(dx, dy)
+          })
         }
       }
-    }).size(600f, 600f)
+      stack.add(StripWrap(background = HeAssets.whiteEdge).also {
+        it.setColor(Pal.darkestGray)
+        it.setCBounds(
+          90f + displayButtonDelta*i, r2 + off,
+          0f, r3 - r2 - off
+        )
+      })
+    }
+
+    table.add(stack).size(0f)
   }
 
   fun build(parent: Group){

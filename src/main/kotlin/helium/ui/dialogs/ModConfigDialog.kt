@@ -4,9 +4,11 @@ import arc.Core
 import arc.func.Cons
 import arc.graphics.Color
 import arc.math.Mathf
+import arc.scene.Element
 import arc.scene.actions.Actions
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
+import arc.scene.ui.ScrollPane
 import arc.scene.ui.TextButton
 import arc.scene.ui.TextButton.TextButtonStyle
 import arc.scene.ui.layout.Scl
@@ -30,6 +32,8 @@ import mindustry.ui.dialogs.BaseDialog
 class ModConfigDialog : BaseDialog("") {
   private var entries: OrderedMap<String, Seq<ConfigLayout>> = OrderedMap()
   private var icons: ObjectMap<String, Drawable> = ObjectMap()
+
+  private var scrollPane: ScrollPane? = null
   private var settings: Table? = null
   private var hover: Table? = null
 
@@ -81,6 +85,15 @@ class ModConfigDialog : BaseDialog("") {
 
     resized { this.rebuild() }
     shown { this.rebuild() }
+  }
+
+  fun show(itemName: String){
+    show()
+    Core.app.post {
+      val elem: Element = settings?.find(itemName)?:return@post
+
+      scrollPane!!.scrollY = elem.y
+    }
   }
 
   private fun rebuild() {
@@ -163,20 +176,17 @@ class ModConfigDialog : BaseDialog("") {
       main.row()
       main.image().color(Color.gray).height(4f).growX().pad(-6f).padTop(4f).padBottom(4f)
       main.row()
-      main.top().pane { pane ->
-        pane.top().table { settings ->
-          settings.defaults().top().growX().height(50f)
-          this.settings = settings
-        }.growX().top()
+      scrollPane = main.top().pane { pane ->
+        pane.defaults().top().growX().height(50f)
+        this.settings = pane
+
         hover = Table(Tex.pane)
         hover!!.visible = false
         pane.addChild(hover)
-      }.growX().fillY().top().get().isScrollingDisabledX = true
+      }.growX().fillY().top().scrollX(false).get()
     }.grow().pad(4f).padLeft(12f).padRight(12f)
     cont.row()
-    relaunchTip = cont.table(
-      HeAssets.grayUIAlpha
-    ) { t: Table ->
+    relaunchTip = cont.table(HeAssets.grayUIAlpha) { t ->
       t.add(Core.bundle["infos.requireRelaunch"]).color(Color.red)
     }.fill().center().margin(10f).pad(4f).get()
     relaunchTip.color.a(0f)
@@ -197,7 +207,7 @@ class ModConfigDialog : BaseDialog("") {
         ent.clip = false
         ent.defaults().growY()
         entry.build(ent)
-      }
+      }.name(entry.name)
       settings!!.row()
     }
   }
