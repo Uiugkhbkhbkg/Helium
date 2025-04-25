@@ -17,10 +17,7 @@ import arc.util.Strings
 import helium.graphics.HeShaders
 import helium.ui.HeAssets
 import helium.ui.HeStyles
-import helium.ui.dialogs.ConfigCheck
-import helium.ui.dialogs.ConfigSepLine
-import helium.ui.dialogs.ConfigSlider
-import helium.ui.dialogs.ModConfigDialog
+import helium.ui.dialogs.*
 import helium.ui.fragments.entityinfo.EntityInfoFrag
 import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
@@ -72,6 +69,7 @@ object He {
   lateinit var entityRangeDisplay: EntityRangeDisplay
 
   lateinit var configDialog: ModConfigDialog
+  lateinit var heModsDialog: HeModsDialog
 
   private fun update() {
     global.autosave()
@@ -110,6 +108,9 @@ object He {
 
     configDialog = ModConfigDialog()
     setupSettings(configDialog)
+
+    heModsDialog = HeModsDialog()
+    Events.on(EventType.ClientLoadEvent::class.java){ heModsDialog.show() }
 
     setupGlobalListeners()
 

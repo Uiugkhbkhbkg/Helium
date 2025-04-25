@@ -27,6 +27,7 @@ import arc.struct.ObjectMap
 import arc.struct.OrderedMap
 import arc.struct.Seq
 import arc.util.Align
+import arc.util.Time
 import helium.He
 import helium.He.config
 import helium.ui.HeAssets
@@ -490,7 +491,7 @@ class HePlacementFrag {
   private fun update() {
     if (selectionShown) {
       currentSlot?.also { slot ->
-        if (slot.block != currBlock) {
+        if (slot.block != currBlock && currBlock != null) {
           slot.block = currBlock
           slot.save()
         }
@@ -766,8 +767,16 @@ class HePlacementFrag {
 
     private val numKey = KeyCode.all[KeyCode.num1.ordinal + id]
 
+    private var lastClick = 0f
+
     init {
       clicked {
+        if (Time.globalTime - lastClick < 15f) {
+          currBlock = null
+          block = null
+          return@clicked
+        }
+        lastClick = Time.globalTime
         if (currentSlot == this) {
           currentSlot = null
           currBlock = null

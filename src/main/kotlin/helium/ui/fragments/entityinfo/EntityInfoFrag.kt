@@ -85,6 +85,7 @@ class EntityInfoFrag {
   private val currHov = OrderedSet<EntityEntry>()
 
   private var selecting = false
+  private var clearTimer = 0f
   private val selectStart = Vec2()
   private val selectionRect = Rect()
 
@@ -505,6 +506,7 @@ class EntityInfoFrag {
     if (hotkeyDown) {
       if (!selecting && Core.input.keyDown(Binding.select)) {
         selecting = true
+        clearTimer = Time.globalTime
         selectStart.set(mouse)
         selectionRect.set(mouse.x, mouse.y, 0f, 0f)
       }
@@ -514,6 +516,8 @@ class EntityInfoFrag {
         val width = abs(selectStart.x - mouse.x)
         val height = abs(selectStart.y - mouse.y)
         selectionRect.set(beginX, beginY, width, height)
+
+        if (selectionRect.width > 4 || selectionRect.height > 4) clearTimer = 0f
       }
       else {
         selectionRect.set(mouse.x, mouse.y, 0f, 0f)
@@ -556,7 +560,7 @@ class EntityInfoFrag {
     }
 
     if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
-      if (currHov.isEmpty) hovering.clear()
+      if (currHov.isEmpty && Time.globalTime - clearTimer < 15f) hovering.clear()
       else {
         var anyAdded = currHov.size > hovering.size
         currHov.forEach { hov ->
