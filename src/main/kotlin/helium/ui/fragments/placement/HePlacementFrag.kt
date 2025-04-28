@@ -31,6 +31,7 @@ import arc.util.Time
 import helium.He
 import helium.He.config
 import helium.ui.HeAssets
+import helium.ui.UIUtils.line
 import helium.ui.elements.HeCollapser
 import helium.util.accessField
 import mindustry.Vars
@@ -191,14 +192,14 @@ class HePlacementFrag {
                 fastInventory = fastInv
                 buildFastInventory(fastInventory)
               }.padLeft(4f)
-              bottom.image().color(Color.darkGray).width(4f).growY()
+              bottom.line(Color.darkGray, false, 4f)
                 .padLeft(4f).padRight(-2f)
               bottom.add(HeCollapser(collX = true, collY = false, collapsed = true) { blocks ->
                 blocks.top()
                 blockSelection = blocks
                 buildBlockSelection(blockSelection)
               }.setDuration(0.3f, Interp.pow3Out).also { foldBlocks = it })
-              bottom.image().color(Color.darkGray).width(4f).growY()
+              bottom.line(Color.darkGray, false, 4f)
                 .padLeft(-2f).padRight(0f)
               bottom.table { tools ->
                 tools.top()

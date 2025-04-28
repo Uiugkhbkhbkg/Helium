@@ -1,11 +1,15 @@
 package helium.ui
 
 import arc.graphics.Color
+import arc.graphics.g2d.Lines
+import arc.scene.style.BaseDrawable
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.layout.Scl
+import arc.util.Time
 import arc.util.Tmp
 import helium.Helium
+import helium.graphics.DrawUtils
 import helium.graphics.EdgeLineStripDrawable
 import helium.graphics.FillStripDrawable
 import helium.graphics.StripDrawable
@@ -17,6 +21,10 @@ object HeAssets {
 
   lateinit var heIcon: Drawable
   lateinit var program: Drawable
+  lateinit var java: Drawable
+  lateinit var javascript: Drawable
+
+  lateinit var loading: Drawable
 
   lateinit var transparent: Drawable
   lateinit var grayUI: Drawable
@@ -34,6 +42,21 @@ object HeAssets {
   fun load(){
     heIcon = Helium.getDrawable("helium")
     program = Helium.getDrawable("program")
+    java = Helium.getDrawable("java")
+    javascript = Helium.getDrawable("javascript")
+
+    loading = object: BaseDrawable(){
+      override fun draw(x: Float, y: Float, width: Float, height: Float) {
+        val r1 = Time.globalTime*2
+        val r2 = Time.globalTime
+        val ang = (r1 - r2)%720 - 360f
+        Lines.stroke(Scl.scl(4f))
+        DrawUtils.arc(
+          x + width/2, y + height/2,
+          width/2.3f, ang, r1
+        )
+      }
+    }
 
     slotsBack = Helium.getDrawable("slots-back")
 

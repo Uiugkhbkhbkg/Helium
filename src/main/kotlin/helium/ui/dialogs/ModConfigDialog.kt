@@ -21,6 +21,7 @@ import helium.He
 import helium.Helium
 import helium.ui.HeAssets
 import helium.ui.HeStyles
+import helium.ui.UIUtils.line
 import mindustry.Vars
 import mindustry.gen.Icon
 import mindustry.gen.Tex
@@ -174,7 +175,7 @@ class ModConfigDialog : BaseDialog("") {
         }
       }.growX().fillY()
       main.row()
-      main.image().color(Color.gray).height(4f).growX().pad(-6f).padTop(4f).padBottom(4f)
+      main.line(Color.gray, true, 4f).pad(-6f).padTop(4f).padBottom(4f)
       main.row()
       scrollPane = main.top().pane { pane ->
         pane.defaults().top().growX().height(50f)

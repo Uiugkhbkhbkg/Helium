@@ -1,35 +1,142 @@
 package helium.ui.dialogs
 
 import arc.Core
+import arc.func.Cons
+import arc.func.Func
 import arc.graphics.Color
+import arc.graphics.g2d.Draw
 import arc.graphics.g2d.TextureRegion
+import arc.math.Interp
+import arc.math.Mathf
+import arc.scene.Element
+import arc.scene.actions.Actions
+import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.Button
+import arc.scene.ui.Image
+import arc.scene.ui.Label
+import arc.scene.ui.Tooltip
+import arc.scene.ui.layout.Cell
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
-import arc.util.Scaling
+import arc.struct.ObjectMap
+import arc.struct.OrderedMap
+import arc.struct.Seq
+import arc.util.*
+import arc.util.serialization.Jval
+import helium.He
+import helium.addEventBlocker
+import helium.set
+import helium.ui.ButtonEntry
 import helium.ui.HeAssets
+import helium.ui.UIUtils
+import helium.ui.UIUtils.line
+import helium.ui.closeBut
 import helium.ui.elements.HeCollapser
+import helium.util.Downloader
+import helium.util.toStoreSize
 import mindustry.Vars
 import mindustry.Vars.modGuideURL
+import mindustry.core.Version
+import mindustry.ctype.UnlockableContent
 import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustry.graphics.Pal
+import mindustry.io.JsonIO
 import mindustry.mod.Mods
+import mindustry.mod.Mods.ModState
+import mindustry.ui.Bar
 import mindustry.ui.Styles
 import mindustry.ui.dialogs.BaseDialog
+import universecore.ui.elements.markdown.Markdown
+import universecore.ui.elements.markdown.MarkdownStyles
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Future
+import kotlin.math.max
+
+private val switchBut: Button.ButtonStyle = Button.ButtonStyle().also {
+  it.up = Styles.none
+  it.over = HeAssets.grayUIAlpha
+  it.down = HeAssets.grayUI
+  it.checked = HeAssets.grayUI
+}
+
+private const val ENABLED              = 0b000000000001
+private const val CLIENT_ONLY          = 0b000000000010
+private const val JAR_MOD              = 0b000000000100
+private const val JS_MOD               = 0b000000001000
+private const val UP_TO_DATE           = 0b000000010000
+private const val DEPRECATED           = 0b000000100000
+private const val UNSUPPORTED          = 0b000001000000
+private const val LIB_MISSING          = 0b000010000000
+private const val LIB_INCOMPLETE       = 0b000100000000
+private const val LIB_CIRCLE_DEPENDING = 0b001000000000
+private const val ERROR                = 0b010000000000
+private const val BLACKLIST            = 0b100000000000
+
+private var exec: ExecutorService = Threads.unboundedExecutor("HTTP", 1)
+private var modList: OrderedMap<Name, ModListing>? = null
+
+private fun Int.isEnabled() = this and ENABLED != 0
+private fun Int.isClientOnly() = this and CLIENT_ONLY != 0
+private fun Int.isJAR() = this and JAR_MOD != 0
+private fun Int.isJS() = this and JS_MOD != 0
+private fun Int.isUpToDate() = this and UP_TO_DATE != 0
+private fun Int.isDeprecated() = this and DEPRECATED != 0
+private fun Int.isUnsupported() = this and UNSUPPORTED != 0
+private fun Int.isLibMissing() = this and LIB_MISSING != 0
+private fun Int.isLibIncomplete() = this and LIB_INCOMPLETE != 0
+private fun Int.isLibCircleDepending() = this and LIB_CIRCLE_DEPENDING != 0
+private fun Int.isError() = this and ERROR != 0
+private fun Int.isBlackListed() = this and BLACKLIST != 0
+
+private fun Int.isValid() = this and (
+    DEPRECATED or
+    UNSUPPORTED or
+    LIB_MISSING or
+    LIB_INCOMPLETE or
+    LIB_CIRCLE_DEPENDING or
+    ERROR or
+    BLACKLIST
+) == 0
+
+private fun <T: Element> Cell<T>.addTip(tipText: String): Cell<T> {
+  tooltip{ t -> t.table(HeAssets.padGrayUIAlpha) { tip ->
+    tip.add(tipText, Styles.outlineLabel)
+  }}
+
+  return this
+}
 
 class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
+  private val browser = HeModsBrowser()
 
+  private val modTabs = ObjectMap<Mods.LoadedMod, Table>()
+  private val updateChecked = ObjectMap<Mods.LoadedMod, UpdateEntry>()
+
+  private var shouldRelaunch = false
+  private lateinit var tipTable: Table
   private lateinit var disabled: Table
   private lateinit var enabled: Table
 
   private var searchStr = ""
 
   init {
-    rebuild()
-
+    shown(::rebuild)
     resized(::rebuild)
+
+    hidden {
+      if (shouldRelaunch) {
+        UIUtils.showTip(
+          Core.bundle["dialog.mods.shouldRelaunch"],
+          Core.bundle["dialog.mods.relaunch"]
+        ){
+          Core.app.exit()
+        }
+      }
+    }
   }
 
   fun rebuild(){
@@ -37,62 +144,151 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
     cont.table { main ->
       if (Core.graphics.isPortrait){
+        main.table(HeAssets.grayUIAlpha) { list ->
+          list.top().margin(6f)
 
+          var coll: HeCollapser? = null
+          list.button(Core.bundle["dialog.mods.menu"], Icon.menuSmall, Styles.flatt){
+            coll?.toggle()
+          }.growX().height(38f).margin(8f).update { b ->
+            b.find<Image> { it is Image }.setDrawable(if (coll?.collapse?:true) Icon.menuSmall else Icon.upOpen)
+          }
+          list.row()
+          list.add(HeCollapser(collX = false, collY = true, collapsed = true){ coll ->
+            coll.pane(Styles.smallPane) { pane ->
+              pane.defaults().growX().fillY().pad(4f)
+              pane.add(Core.bundle["dialog.mods.importMod"]).color(Color.gray)
+              pane.row()
+              pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
+              pane.row()
+              pane.button(Core.bundle["mods.browser"], Icon.planet, Styles.flatBordert, 46f){
+                browser.show()
+              }.margin(8f)
+              pane.row()
+              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){  }
+                .margin(8f)
+              pane.row()
+              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){  }
+                .margin(8f)
+              pane.row()
+
+              pane.add(Core.bundle["dialog.mods.otherHandle"]).color(Color.gray)
+              pane.row()
+              pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
+              pane.row()
+              pane.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
+              {  }
+              pane.row()
+              pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
+              {
+                if (Core.app.isMobile)
+                else Core.app.openFolder(Vars.modDirectory.absolutePath())
+              }
+              pane.row()
+              pane.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
+              { Core.app.openURI(modGuideURL) }
+            }.growX().fillY().maxHeight(400f)
+          }.setDuration(0.3f, Interp.pow3Out).also { coll = it }).growX().fillY()
+          list.row()
+          list.line(Pal.darkerGray, true, 4f)
+          list.row()
+          list.pane(Styles.smallPane) { pane ->
+            pane.table { en ->
+              en.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent)
+              en.row()
+              en.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+              en.row()
+              en.top().table { enabled ->
+                this.enabled = enabled
+              }.growX().fillY().top()
+            }.margin(6f).growX().fillY()
+            pane.row()
+            pane.table { di ->
+              di.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent)
+              di.row()
+              di.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+              di.row()
+              di.top().table { disabled ->
+                this.disabled = disabled
+              }.growX().fillY().top()
+            }.margin(6f).growX().fillY()
+          }.growX().fillY().scrollX(false).scrollY(true).get().setForceScroll(true, true)
+        }.grow()
+        main.row()
+        main.line(Pal.gray, true, 4f).pad(-8f).padTop(6f).padBottom(6f)
+        main.row()
+        main.table{ but ->
+          but.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
+          { hide() }.height(58f).pad(6f).growX()
+          but.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f)
+          { refresh() }.height(58f).pad(6f).growX()
+        }.growX().fillY()
       }
       else {
         main.table { search ->
           search.image(Icon.zoom).size(64f).scaling(Scaling.fit)
-          search.field(""){ searchStr = it }.growX()
-        }.growX().fillY().colspan(3).padLeft(16f).padRight(16f)
+          search.field(""){
+            searchStr = it
+            rebuildMods()
+          }.growX()
+        }.growX().fillY().padLeft(16f).padRight(16f)
         main.row()
-        main.table { left ->
-          left.table(HeAssets.grayUIAlpha){ list ->
-            list.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent)
-            list.row()
-            list.image().color(Pal.accent).height(4f).growX().padTop(6f).padBottom(6f)
-            list.row()
-            list.top().pane { enabled ->
-              this.enabled = enabled
-            }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top()
-          }.fillX().growY()
-          left.row()
-          left.button(Core.bundle["dialog.mods.disableAll"], Icon.none, Styles.grayt, 32f){
 
-          }.padTop(6f).growX().margin(8f)
-        }.fillX().growY()
-        main.image().color(Color.gray).width(4f).growY().padLeft(6f).padRight(6f)
-        main.table { right ->
-          right.table(HeAssets.grayUIAlpha){ list ->
-            list.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent)
-            list.row()
-            list.image().color(Pal.accent).height(4f).growX().padTop(6f).padBottom(6f)
-            list.row()
-            list.top().pane { disabled ->
-              this.disabled = disabled
-            }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top()
-          }.fillX().growY()
-          right.row()
-          right.button(Core.bundle["dialog.mods.enableAll"], Icon.box, Styles.grayt, 32f){
+        main.stack(
+          Table{ mods ->
+            mods.table { left ->
+              left.table(HeAssets.grayUIAlpha){ list ->
+                list.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent)
+                list.row()
+                list.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+                list.row()
+                list.top().pane(Styles.smallPane) { enabled ->
+                  this.enabled = enabled
+                }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top().get().setForceScroll(false, true)
+              }.fillX().growY()
+            }.fillX().growY()
+            mods.line(Color.gray, false, 4f).padLeft(6f).padRight(6f)
+            mods.table { right ->
+              right.table(HeAssets.grayUIAlpha){ list ->
+                list.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent)
+                list.row()
+                list.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+                list.row()
+                list.top().pane(Styles.smallPane) { disabled ->
+                  this.disabled = disabled
+                }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top().get().setForceScroll(false, true)
+              }.fillX().growY()
+            }.fillX().growY()
+          },
+          Table{ tip ->
+            tip.bottom().table(HeAssets.grayUIAlpha){ t ->
+              tipTable = t
+              t.visible = false
+            }.fillY().growX().margin(8f)
+          }
+        ).grow()
 
-          }.padTop(6f).growX().margin(8f)
-        }.fillX().growY()
         main.row()
-        main.image().color(Pal.gray).height(4f).growX().pad(-8f).padTop(6f).padBottom(6f).colspan(3)
+        main.line(Pal.gray, true, 4f).pad(-8f).padTop(6f).padBottom(6f)
         main.row()
         main.table { buttons ->
           buttons.table { top ->
             top.defaults().growX().height(54f).pad(4f)
-            top.button(Core.bundle["mods.browser"], Icon.planet, Styles.flatBordert, 46f){  }
+            top.button(Core.bundle["mods.browser"], Icon.planet, Styles.flatBordert, 46f){
+              browser.show()
+            }.margin(8f)
             top.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){  }
+              .margin(8f)
             top.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){  }
+              .margin(8f)
           }.growX().fillY().padBottom(6f)
           buttons.row()
           buttons.table { bot ->
             bot.defaults().growX().height(62f).pad(4f)
             bot.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
             { hide() }
-            bot.button(Core.bundle["dialog.mods.checkUpdate"], Icon.up, Styles.grayt, 46f)
-            {  }
+            bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f)
+            { refresh() }
             bot.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
             {  }
             bot.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
@@ -105,8 +301,17 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           }.growX().fillY()
         }.growX().fillY().colspan(3)
       }
-    }.fillX().growY()
+    }.also {
+      if (Core.graphics.isPortrait) it.grow()
+      else it.fillX().growY()
+    }
 
+    rebuildMods()
+  }
+
+  private fun refresh() {
+    modList = null
+    modTabs.clear()
     rebuildMods()
   }
 
@@ -114,46 +319,1062 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     enabled.clearChildren()
     disabled.clearChildren()
 
-    Vars.mods.list().filter { searchStr.isBlank() || it.name.contains(searchStr) }.forEach { mod ->
-      val addToTarget = if (mod.enabled()) enabled else disabled
-      val modTab = buildModTab(mod)
+    Vars.mods.list()
+      .filter { searchStr.isBlank() || it.name.contains(searchStr) || it.meta.displayName.contains(searchStr) }
+      .forEach { mod ->
+        val stat = checkModStat(mod)
 
-      addToTarget.add(modTab).growX().fillY().pad(4f)
-      addToTarget.row()
-    }
+        val addToTarget = if (mod.enabled() && stat.isValid()) enabled else disabled
+        val modTab = buildModTab(mod)
+
+        addToTarget.add(modTab).growX().fillY().pad(4f)
+        addToTarget.row()
+      }
   }
 
   private fun buildModTab(mod: Mods.LoadedMod): Table {
-    val res = Button(Styles.grayt)
+    modTabs[mod]?.also { return it }
 
-    res.table(Tex.buttonSelect) { icon ->
-      icon.image(mod.iconTexture?.let { TextureRegionDrawable(TextureRegion(it)) }?:Tex.nomap)
-        .scaling(Scaling.fit).size(80f)
-    }.pad(10f).margin(4f).fill()
-    res.stack(
-      Table{ info ->
-        info.left().top().margin(12f).marginLeft(6f).defaults().left()
-        info.add(mod.meta.displayName).color(Pal.accent)
-        info.row()
-        info.add(mod.meta.version, 0.8f).color(Color.lightGray)
-        info.row()
-        info.add(mod.meta.shortDescription()).growY()
-      },
-      Table{ over ->
-        over.right().top().defaults().size(48f)
-        over.button(Icon.rightOpen, Styles.clearNonei){}
-        over.button(Icon.rightOpen, Styles.clearNonei){}
+    val res = Table()
+    var stat = checkModStat(mod)
+    var updateEntry: UpdateEntry? = null
+    var coll: HeCollapser? = null
+    var setupContent = { i: Int -> }
+
+    modTabs[mod] = res
+
+    res.button({ top ->
+      top.table(Tex.buttonSelect) { icon ->
+        icon.image(mod.iconTexture?.let { TextureRegionDrawable(TextureRegion(it)) }?:Tex.nomap)
+          .scaling(Scaling.fit).size(80f)
+      }.pad(10f).margin(4f).size(88f)
+      top.stack(
+        Table{ info ->
+          info.left().top().margin(12f).marginLeft(6f).defaults().left()
+          info.add(mod.meta.displayName).color(Pal.accent).grow().padRight(160f).wrap()
+          info.row()
+          info.add(mod.meta.version, 0.8f).color(Color.lightGray).grow().padRight(50f).wrap()
+          info.row()
+          info.add(mod.meta.shortDescription()).grow().padRight(50f).wrap()
+        },
+        Table{ over ->
+          over.right()
+
+          over.table { status ->
+            status.top().defaults().size(26f).pad(4f)
+
+            var updateTip: Label? = null
+            val checkUpdate = status.image(HeAssets.loading).color(Pal.accent)
+              .tooltip{ t -> t.table(HeAssets.padGrayUIAlpha) { tip ->
+                updateTip = tip.add(Core.bundle["dialog.mods.checkUpdating"], Styles.outlineLabel).get()
+              }}.get()
+
+            buildModAttrIcons(status, stat)
+
+            if (stat.isValid()) {
+              checkModUpdate(mod){ res ->
+                if (res.updateValid) stat = stat or UP_TO_DATE
+
+                if (stat.isUpToDate()) {
+                  checkUpdate.drawable = Icon.upSmall
+                  checkUpdate.setColor(HeAssets.lightBlue)
+
+                  updateEntry = res
+                  updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
+                }
+                else {
+                  checkUpdate.drawable = Icon.okSmall
+                  checkUpdate.setColor(Pal.heal)
+
+                  updateTip!!.setText(Core.bundle["dialog.mods.isLatest"])
+                }
+              }
+            }
+            else {
+              checkModUpdate(mod){ res ->
+                if (res.latestMod == null) {
+                  checkUpdate.drawable = Icon.infoCircleSmall
+                  checkUpdate.setColor(Pal.orangeSpark)
+                  updateTip!!.setText(Core.bundle.format("dialog.mods.checkFailed"))
+                }
+                else if (res.updateValid) stat = stat or UP_TO_DATE
+
+                if (stat.isUpToDate()) {
+                  checkUpdate.drawable = Icon.upSmall
+                  checkUpdate.setColor(HeAssets.lightBlue)
+
+                  updateEntry = res
+                  updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
+                }
+                else {
+                  checkUpdate.visible = false
+                }
+              }
+
+              if (stat.isLibMissing()) status.image(Icon.layersSmall).scaling(Scaling.fit).color(Color.crimson)
+                .addTip(Core.bundle["dialog.mods.libMissing"])
+              else if (stat.isLibIncomplete()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+                .addTip(Core.bundle["dialog.mods.libIncomplete"])
+              else if (stat.isLibCircleDepending()) status.image(Icon.rotate).scaling(Scaling.fit).color(Color.crimson)
+                .addTip(Core.bundle["dialog.mods.libCircleDepending"])
+
+              if (stat.isError()) status.image(Icon.cancelSmall).scaling(Scaling.fit).color(Color.crimson)
+                .addTip(Core.bundle["dialog.mods.error"])
+              if (stat.isBlackListed()) status.image(Icon.infoCircle).scaling(Scaling.fit).color(Color.crimson)
+                .addTip(Core.bundle["dialog.mods.blackListed"])
+            }
+          }.fill().pad(4f)
+
+          over.table { side ->
+            side.line(Color.darkGray, false, 3f)
+            side.table { buttons ->
+              buttons.defaults().size(48f)
+              buttons.button(Icon.rightOpen, Styles.clearNonei, 32f) {
+                Vars.mods.setEnabled(mod, !mod.enabled())
+                rebuildMods()
+                shouldRelaunch()
+              }.update { m -> m.style.imageUp = if (mod.enabled()) Icon.rightOpen else Icon.leftOpen }
+                .disabled { !mod.enabled() && !stat.isValid() }
+
+              buttons.row()
+              buttons.button(Icon.exportSmall, Styles.clearNonei, 48f) { exportLink(mod) }
+              buttons.row()
+
+              buttons.addEventBlocker()
+            }.fill()
+          }.fill()
+        }
+      ).grow()
+    }, Styles.grayt) {
+      coll!!.toggle()
+      if (!coll!!.collapse){
+        setupContent(0)
       }
-    ).grow()
-    res.row()
-    res.add(HeCollapser(collX = false, collY = true){ details ->
+    }.growX().fillY()
 
-    }).growX().fillY().colspan(2)
+    res.row()
+    coll = res.add(HeCollapser(collX = false, collY = true, collapsed = true, Styles.grayPanel){ col ->
+      col.stack(
+        Table{ details ->
+          details.left().defaults().growX().pad(4f).padLeft(12f).padRight(12f)
+
+          details.add(Core.bundle.format("dialog.mods.author", mod.meta.author))
+            .growX().padRight(50f).wrap().color(Pal.accent).labelAlign(Align.left)
+          details.row()
+          details.table { link ->
+            link.left().image(Icon.githubSmall).scaling(Scaling.fit).size(24f).color(Color.lightGray)
+            val linkButton = link.button("...", Styles.nonet) {}
+              .padLeft(4f).padRight(50f).wrapLabel(true)
+              .growX().left().align(Align.left).height(30f).disabled(true).get()
+
+            linkButton.label.setAlignment(Align.left)
+            linkButton.label.setFontScale(0.9f)
+            getModList(
+              errHandler = {
+                linkButton.isDisabled = true
+                linkButton.setText(Core.bundle["dialog.mods.checkFailed"])
+              }
+            ) { modList ->
+              val modInfo = modList[Name(mod)]
+
+              if (modInfo == null) {
+                linkButton.isDisabled = true
+                linkButton.setText(Core.bundle["dialog.mods.noGithubRepo"])
+              }
+              else {
+                val url = "https://github.com/${modInfo.repo}"
+                linkButton.isDisabled = false
+                linkButton.setText(url)
+                linkButton.clicked { Core.app.openURI(url) }
+              }
+            }
+          }
+          details.row()
+          details.table{ status ->
+            status.left().defaults().left()
+
+            status.collapser(
+              { t ->
+                t.left().defaults().left()
+                buildStatus(t, Icon.upSmall, Core.bundle["dialog.mods.updateValidS"], HeAssets.lightBlue)
+              }, false){ stat.isUpToDate() }.fill().colspan(2)
+            status.row()
+
+            if (stat.isValid()) {
+              buildStatus(status, Icon.okSmall, Core.bundle["dialog.mods.modStatCorrect"], Pal.heal)
+            }
+            else {
+              buildStatus(status, Icon.cancelSmall, Core.bundle["dialog.mods.modStatError"], Color.crimson)
+            }
+
+            buildModAttrList(status, stat)
+
+            if (stat.isLibMissing()) {
+              buildStatus(status, Icon.layersSmall, Core.bundle["dialog.mods.libMissing"], Color.crimson)
+            }
+            else if (stat.isLibIncomplete()) {
+              buildStatus(status, Icon.warningSmall, Core.bundle["dialog.mods.libIncomplete"], Color.crimson)
+            }
+            else if (stat.isLibCircleDepending()) {
+              buildStatus(status, Icon.rotateSmall, Core.bundle["dialog.mods.libCircleDepending"], Color.crimson)
+            }
+
+            if (stat.isError()) {
+              buildStatus(status, Icon.cancelSmall, Core.bundle["dialog.mods.error"], Color.crimson)
+            }
+            if (stat.isBlackListed()) {
+              buildStatus(status, Icon.infoCircleSmall, Core.bundle["dialog.mods.blackListed"], Color.crimson)
+            }
+          }
+          details.row()
+          details.line(Color.gray, true, 4f).pad(6f).padLeft(-6f).padRight(-6f)
+          details.row()
+
+          val contents = if (stat.isEnabled()) Vars.content.contentMap.map { it.toList() }
+            .flatten()
+            .filterIsInstance<UnlockableContent>()
+            .filter { c -> c.minfo.mod === mod && !c.isHidden }
+          else listOf()
+
+          var current = -1
+          details.table { switch ->
+            switch.left().defaults().center()
+            switch.button({ it.add(Core.bundle["dialog.mods.description"], 0.85f) }, switchBut){ setupContent(0) }
+              .margin(12f).checked { current == 0 }.disabled { t -> t.isChecked }
+            switch.button({ it.add(Core.bundle["dialog.mods.rawText"], 0.85f) }, switchBut){ setupContent(1) }
+              .margin(12f).checked { current == 1 }.disabled { t -> t.isChecked }
+            if (contents.any()) {
+              switch.button({ it.add(Core.bundle["dialog.mods.contents"], 0.85f) }, switchBut) { setupContent(2) }
+                .margin(12f).checked { current == 2 }.disabled { t -> t.isChecked }
+            }
+          }.grow().padBottom(0f)
+          details.row()
+          details.table(HeAssets.grayUI) { desc ->
+            desc.defaults().grow()
+            setupContent = a@{ i ->
+              if (i == current) return@a
+
+              desc.clearChildren()
+              current = i
+
+              when(i){
+                0 -> desc.add(Markdown(mod.meta.description, MarkdownStyles.defaultMD))
+                1 -> desc.add(mod.meta.description).wrap()
+                2 -> {
+                  Core.app.post {
+                    val n = (desc.width/Scl.scl(50f)).toInt()
+                    contents.forEachIndexed { i, c ->
+                      if (i > 0 && i%n == 0) desc.row()
+
+                      desc.button(TextureRegionDrawable(c.uiIcon), Styles.flati, Vars.iconMed) {
+                        Vars.ui.content.show(c)
+                      }.size(50f).with { im ->
+                        val click = im.clickListener
+                        im.update {
+                          im.image.color.lerp(
+                            if (!click.isOver) Color.lightGray else Color.white,
+                            0.4f*Time.delta
+                          )
+                        }
+                      }.tooltip(c.localizedName)
+                    }
+                  }
+                }
+              }
+            }
+          }.grow().margin(12f).padTop(0f)
+        },
+        Table{ lay ->
+          lay.top().right().table { l ->
+            l.line(Color.darkGray, false, 3f)
+            l.table { buttons ->
+              buttons.collapser(
+              {
+                it.button(Icon.upSmall, Styles.clearNonei, 48f) {
+                  val latest = updateEntry?.latestMod
+                  if (latest != null) {
+                    downloadMod(latest)
+                  }
+                  else UIUtils.showError(Core.bundle["dialog.mods.noDownloadLink"])
+                }.size(48f).visible { stat.isUpToDate() }
+              }, false){ stat.isUpToDate() }.fill()
+              buttons.row()
+              buttons.button(Icon.trashSmall, Styles.clearNonei, 48f) { deleteMod(mod) }.size(48f)
+            }.fill()
+          }.fill()
+        }
+      ).grow()
+    }.also { it.setDuration(0.3f, Interp.pow3Out) }).growX().fillY().colspan(2).get()
 
     return res
   }
+
+  private fun shouldRelaunch(){
+    shouldRelaunch = true
+
+    if (!tipTable.visible) {
+      tipTable.visible = true
+      tipTable.color.a = 0f
+      tipTable.clearChildren()
+      tipTable.add(Core.bundle["dialog.mods.shouldRelaunch"]).color(Color.crimson)
+      tipTable.actions(Actions.alpha(1f, 0.3f, Interp.pow3Out))
+    }
+  }
+
+  private fun deleteMod(mod: Mods.LoadedMod) {
+    if (Name(mod) == Name("EBwilson", "he")) {
+      UIUtils.showConfirm(Core.bundle["dialog.mods.deleteMod"], Core.bundle["dialog.mods.confirmDeleteHe"]) {
+        Vars.mods.removeMod(mod)
+        Core.app.exit()
+      }
+    }
+    else {
+      UIUtils.showConfirm(Core.bundle["dialog.mods.deleteMod"], Core.bundle["mod.remove.confirm"]) {
+        Vars.mods.removeMod(mod)
+        rebuildMods()
+        shouldRelaunch()
+      }
+    }
+  }
+
+  private fun exportLink(mod: Mods.LoadedMod) {
+    getModList(
+      errHandler = { e ->
+        Log.err(e)
+        UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+      }
+    ) { list ->
+      val info = list.get(Name(mod))
+
+      if (info != null) {
+        val link = "https://github.com/${info.repo}"
+
+        UIUtils.showPane(
+          Core.bundle["dialog.mods.exportLink"],
+          closeBut,
+          ButtonEntry(Core.bundle["misc.open"], Icon.link) {
+            Core.app.openURI(link)
+          },
+          ButtonEntry(Core.bundle["misc.copy"], Icon.copy) {
+            Core.app.clipboardText = link
+            Vars.ui.showInfoFade(Core.bundle["infos.copied"])
+          }
+        ){ t ->
+          t.add(Core.bundle["dialog.mods.githubLink"]).growX().pad(6f).left()
+            .labelAlign(Align.left).color(Color.lightGray)
+          t.row()
+          t.table(HeAssets.darkGrayUIAlpha) { l ->
+            l.image(Icon.github).scaling(Scaling.fit).pad(6f).size(36f)
+            l.add(link).pad(6f)
+          }.margin(12f)
+        }
+      }
+      else {
+        UIUtils.showTip(
+          Core.bundle["dialog.mods.noLink"],
+          '' + Core.bundle["dialog.mods.noGithubRepo"]
+        )
+      }
+    }
+  }
+
+  private fun downloadMod(modInfo: ModListing, callback: Runnable? = null) {
+    var progress = 0f
+    var downloading = false
+    var complete = false
+    var task: Future<*>? = null
+
+    val loaded = Vars.mods.getMod(modInfo.internalName)
+    val isUpdate = loaded != null && loaded.meta.version != modInfo.version
+
+    UIUtils.showPane(
+      Core.bundle[if (isUpdate) "dialog.mods.updateMod" else "dialog.mods.downloadMod"],
+      ButtonEntry(
+        Core.bundle["cancel"],
+        Icon.cancel
+      ) {
+        task?.cancel(true)
+        it.hide()
+      },
+      ButtonEntry(
+        { Core.bundle[if (complete) "misc.complete" else "misc.download"] },
+        { if (complete) Icon.ok else Icon.download },
+        disabled = { downloading && !complete }
+      ) {
+        if (complete) {
+          it.hide()
+          return@ButtonEntry
+        }
+
+        downloading = true
+
+        task = exec.submit {
+          Http.get(Vars.ghApi + "/repos/" + modInfo.repo + "/releases/latest")
+            .error { e ->
+              downloading = false
+              if (e is InterruptedException) return@error
+              Log.err(e)
+              UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+            }
+            .block { result ->
+              val json = Jval.read(result.getResultAsString())
+              val assets = json.get("assets").asArray()
+
+              val dexedAsset = assets.find { j ->
+                j.getString("name").startsWith("dexed")
+                && j.getString("name").endsWith(".jar")
+              }
+              val jarAssets = dexedAsset ?: assets.find { j ->
+                j.getString("name").endsWith(".jar")
+              }
+              val asset = jarAssets ?: assets.find { j ->
+                j.getString("name").endsWith(".zip")
+              }
+
+              val suffix = if (dexedAsset == null && jarAssets == null) ".zip" else ".jar"
+
+              val url = if (asset != null) {
+                asset.getString("browser_download_url")
+              }
+              else {
+                json.getString("zipball_url")
+              }
+
+              val fi = Vars.modDirectory.child("tmp").child(modInfo.internalName + suffix)
+              Downloader.downloadToFile(
+                url, fi, true,
+                { p -> progress = p },
+                { e ->
+                  if (e is InterruptedException) return@downloadToFile
+                  Log.err(e)
+                  UIUtils.showException(e, Core.bundle["dialog.mods.downloadFailed"])
+                }
+              ) {
+                Core.app.post {
+                  try {
+                    if (isUpdate) {
+                      loaded.also { m -> Vars.mods.removeMod(m) }
+                    }
+                    Vars.mods.importMod(fi)
+                    fi.delete()
+                    complete = true
+                    shouldRelaunch()
+                    rebuildMods()
+                    callback?.run()
+                  } catch (e: Exception) {
+                    Log.err(e)
+                    UIUtils.showException(e, Core.bundle["dialog.mods.downloadFailed"])
+                  }
+                }
+              }
+            }
+        }
+      }
+    ){ t ->
+      val iconLink = "https://raw.githubusercontent.com/EB-wilson/HeMindustryMods/master/icons/" + modInfo.repo.replace("/", "_")
+      val image = Downloader.downloadImg(iconLink, Core.atlas.find("nomap"))
+
+      t.table(HeAssets.darkGrayUIAlpha){ cont ->
+        cont.table(Tex.buttonSelect) { icon ->
+          icon.image(image).scaling(Scaling.fit).size(80f)
+        }.pad(10f).margin(4f).size(88f)
+        cont.table { info ->
+          info.left().top().defaults().left().pad(3f)
+          info.add(modInfo.name).color(Pal.accent)
+          info.row()
+          if (loaded != null) {
+            if (loaded.meta.version != modInfo.version) {
+              info.add("[lightgray]${loaded.meta.version}  >>>  [accent]${modInfo.version}")
+            }
+            else {
+              info.add("[lightgray]${loaded.meta.version}  >>>  ${modInfo.version}" + Core.bundle["dialog.mods.reinstall"])
+            }
+          }
+          else info.add(modInfo.version)
+          info.row()
+          info.table{ b ->
+            b.add(Bar(
+              {
+                if (complete) Core.bundle["dialog.mods.downloadComplete"]
+                else Core.bundle.format(
+                  "dialog.mods.downloading",
+                  if (progress < 0) (-progress).toStoreSize()
+                  else "${Mathf.round(progress*100)}%"
+                )
+              },
+              { Pal.accent },
+              { if (progress < 0) 1f else progress }
+            )).growX().pad(6f).height(22f).visible { downloading }
+          }.grow()
+        }.pad(12f).padLeft(4f).growX().fillY().minWidth(420f)
+      }.margin(6f).growX().fillY()
+    }
+  }
+
+  private fun checkModUpdate(mod: Mods.LoadedMod, callback: (UpdateEntry) -> Unit) {
+    val res = updateChecked.get(mod)
+    if (res != null) callback(res)
+    else {
+      getModList(
+        errHandler = { e ->
+          Log.err(e)
+          UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+        }
+      ) { list ->
+        val modInfo = list[Name(mod)]
+
+        if (modInfo == null) callback(UpdateEntry(mod, false, null))
+        else {
+          if (modInfo.version != mod.meta.version) callback(UpdateEntry(mod, true, modInfo))
+          else callback(UpdateEntry(mod, false, modInfo))
+        }
+      }
+    }
+  }
+
+  private fun checkModStat(mod: Mods.LoadedMod): Int{
+    var res = 0b0
+
+    if (mod.enabled()) res = res or ENABLED
+    if (mod.meta.hidden) res = res or CLIENT_ONLY
+    if (mod.isJava) res = res or JAR_MOD
+    if (mod.root.child("scripts").exists()) {
+      val allScripts = mod.root.child("scripts").findAll { f -> f.extEquals("js") }
+      val main = if (allScripts.size == 1) allScripts.first() else mod.root.child("scripts").child("main.js")
+      if (main.exists() && !main.isDirectory()) {
+        res = res or JS_MOD
+      }
+    }
+    if (mod.isOutdated) res = res or DEPRECATED
+    if (!Version.isAtLeast(mod.meta.minGameVersion)) res = res or UNSUPPORTED
+    if (mod.hasUnmetDependencies()) res = res or LIB_MISSING
+    if (mod.state == ModState.incompleteDependencies) res = res or LIB_INCOMPLETE
+    if (mod.state == ModState.circularDependencies) res = res or LIB_CIRCLE_DEPENDING
+    if (mod.hasContentErrors()) res = res or ERROR
+    if (mod.isBlacklisted) res = res or BLACKLIST
+
+    return res
+  }
+
+  private data class UpdateEntry(
+    val mod: Mods.LoadedMod,
+    val updateValid: Boolean,
+    val latestMod: ModListing?,
+  )
+
+  inner class HeModsBrowser: BaseDialog(Core.bundle["mods.browser"]) {
+    private lateinit var rebuildList: () -> Unit
+
+    private val bowserTab = ObjectMap<ModListing, Table>()
+    private val favoritesMods = Seq<ModListing>()
+
+    private var search = ""
+    private var orderDate = false
+    private var reverse = false
+    private var hideInvalid = true
+
+    init {
+      shown(::rebuild)
+      resized(::rebuild)
+    }
+
+    fun rebuild(){
+      cont.clearChildren()
+      cont.table { main ->
+        main.top()
+        main.table { top ->
+          top.image(Icon.zoom).size(64f).scaling(Scaling.fit)
+          top.field(""){
+            search = it
+            rebuildList()
+          }.growX()
+          top.button(Icon.list, Styles.emptyi, 32f) {
+            orderDate = !orderDate
+            rebuildList()
+          }.update { b -> b.style.imageUp = (if (orderDate) Icon.list else Icon.star) }
+            .size(48f).get()
+            .addListener(Tooltip { tip ->
+              tip!!.label { if (orderDate) "@mods.browser.sortdate" else "@mods.browser.sortstars" }.left()
+            })
+          top.button(Icon.list, Styles.emptyi, 32f) {
+            reverse = !reverse
+            rebuildList()
+          }.update { b -> b.style.imageUp = (if (reverse) Icon.upOpen else Icon.downOpen) }
+            .size(48f).get()
+            .addListener(Tooltip { tip ->
+              tip!!.label { if (reverse) "@misc.reverse" else "@misc.sequence" }.left()
+            })
+          top.check(Core.bundle["dialog.mods.hideInvalid"], hideInvalid) {
+            hideInvalid = it
+            rebuildList()
+          }
+        }.growX().padLeft(40f).padRight(40f)
+        main.row()
+        main.line(Pal.accent, true, 4f).padTop(4f)
+        main.row()
+        main.pane { list ->
+          list.top().defaults().fill()
+
+          val n = max((Core.graphics.width/Scl.scl(540f)).toInt(), 1)
+
+          rebuildList = {
+            var favCols: Array<Table>? = null
+            var normCols: Array<Table>? = null
+
+            favoritesMods.clear()
+
+            list.clearChildren()
+            list.add(" " + Core.bundle["dialog.mods.favorites"]).color(Pal.accent).padLeft(6f)
+            list.row()
+            list.line(Pal.accent, true, 4f).pad(6f).padLeft(-4f).padRight(-4f)
+            list.row()
+            list.table { fav ->
+              fav.add(HeCollapser(collX = false, collY = true, background = HeAssets.grayUIAlpha){ col ->
+                col.table { t -> t.add(Core.bundle["dialog.mods.noFavorites"]) }.fill().margin(24f)
+              }.setCollapsed { favoritesMods.any() }).fill().colspan(n)
+
+              fav.row()
+
+              favCols = Array(n) {
+                fav.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }
+                  .width(540f).growY().pad(6f).get()
+              }
+            }
+            list.row()
+            list.add(" " + Core.bundle["dialog.mods.mods"]).color(Pal.accent).padLeft(6f)
+            list.row()
+            list.line(Pal.accent, true, 4f).pad(6f).padLeft(-4f).padRight(-4f)
+            list.row()
+            list.table { norm -> normCols = Array(n) {
+              norm.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }
+                .width(540f).growY().pad(6f).get()
+            } }
+            getModList(
+              errHandler = { e ->
+                Log.err(e)
+                UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+              }
+            ) { ls ->
+              var favI = 0
+              var normI = 0
+
+              ls.values()
+                .filter { search.isBlank() || it.name.contains(search) || it.internalName.contains(search) }
+                .filter { !hideInvalid || it.checkStatus().isValid() }
+                .let { l ->
+                  if (reverse) {
+                    if (orderDate) l.reversed()
+                    else l.sortedBy { it.stars }
+                  }
+                  else {
+                    if (orderDate) l
+                    else l.sortedBy { -it.stars }
+                  }
+                }
+                .forEach { m ->
+                  val key = "mod.favorites.${m.internalName}"
+                  val col = if (He.global.getBool(key, false)) {
+                    favoritesMods.add(m)
+                    favCols!![favI++%n]
+                  }
+                  else normCols!![normI++%n]
+                  val tab = buildModTab(m)
+
+                  col.add(tab).growX().fillY().pad(4f).row()
+                }
+            }
+          }
+
+          rebuildList()
+        }.growY().fillX().padLeft(20f).padRight(20f)
+        main.row()
+        main.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
+        main.row()
+        main.table { bot ->
+          bot.defaults().width(242f).height(62f).pad(6f)
+          bot.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
+          { hide() }
+          bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f) {
+            modList = null
+            bowserTab.clear()
+
+            rebuildList()
+          }
+          if (Core.graphics.isPortrait) bot.row()
+          bot.button(Core.bundle["dialog.mods.importFav"], Icon.download, Styles.grayt, 46f) {
+
+          }
+          bot.button(Core.bundle["dialog.mods.exportFav"], Icon.export, Styles.grayt, 46f) {
+
+          }
+        }.growX().fillY()
+      }.grow()
+    }
+
+    private fun buildModTab(mod: ModListing): Table {
+      bowserTab[mod]?.also { return it }
+
+      val res = Table()
+      val stat = mod.checkStatus()
+      var coll: HeCollapser? = null
+      var setupContent = { i: Int -> }
+      val key = "mod.favorites.${mod.internalName}"
+
+      bowserTab[mod] = res
+
+      val iconLink = "https://raw.githubusercontent.com/Anuken/MindustryMods/master/icons/" + mod.repo.replace("/", "_")
+      val image = Downloader.downloadImg(iconLink, Core.atlas.find("nomap"))
+      val loaded = Vars.mods.getMod(mod.internalName)
+
+      res.button(
+        { top ->
+          top.table(Tex.buttonSelect) { icon ->
+            icon.stack(
+              Image(TextureRegionDrawable(image)).setScaling(Scaling.fit),
+              Table { starts ->
+                starts.bottom().left()
+                starts.add(object : Element(){
+                  override fun draw() {
+                    validate()
+                    Draw.color(Color.darkGray)
+                    Icon.starSmall.draw(
+                      x - width*0.2f, y - height*0.2f,
+                      0f, 0f, width, height,
+                      1.4f, 1.4f, 0f
+                    )
+                    Draw.color(Color.white)
+                    Icon.starSmall.draw(x, y, width, height)
+                  }
+                }).size(60f).pad(-16f)
+                starts.add(mod.stars.toString(), Styles.outlineLabel, 0.85f)
+                  .bottom().padBottom(4f).padLeft(-2f)
+              }
+            ).size(80f)
+          }.pad(10f).margin(4f).size(88f)
+          top.stack(
+            Table { info ->
+              info.left().top().margin(12f).marginLeft(6f).defaults().left()
+              info.add(mod.name).color(Pal.accent).growX().labelAlign(Align.left).padRight(160f).wrap()
+              info.row()
+              info.add(mod.version, 0.8f).color(Color.lightGray).growX().padRight(50f).wrap()
+              info.row()
+              info.add(mod.shortDescription()).growY().growX().padRight(50f).wrap()
+            },
+            Table { over ->
+              over.top().right()
+
+              over.table { status ->
+                status.top().defaults().size(26f).pad(4f)
+
+                loaded?.also { loaded ->
+                  if (loaded.meta.version != mod.version){
+                    status.image(Icon.starSmall).scaling(Scaling.fit).color(HeAssets.lightBlue)
+                      .addTip(Core.bundle["dialog.mods.newVersion"])
+                  }
+                  else {
+                    status.image(Icon.okSmall).scaling(Scaling.fit).color(Pal.heal)
+                      .addTip(Core.bundle["dialog.mods.installed"])
+                  }
+                }
+
+                buildModAttrIcons(status, stat)
+              }.fill().pad(4f)
+
+              over.table { side ->
+                side.line(Color.darkGray, false, 3f)
+                side.table { buttons ->
+                  buttons.defaults().size(48f)
+                  buttons.button(Icon.star, Styles.clearNonei, 24f) {
+                    He.global.put(key, !He.global.getBool(key, false))
+                    rebuildList()
+                  }.update { b ->
+                    b.image.setScale(0.9f)
+                    b.style.imageUpColor = if (He.global.getBool(key, false)) Pal.accent else Color.white
+                  }
+
+                  buttons.row()
+                  buttons.button(Icon.downloadSmall, Styles.clearNonei, 48f) {
+                    downloadMod(mod)
+                  }
+                  buttons.row()
+
+                  buttons.addEventBlocker()
+                }.fill()
+              }.fill()
+            }
+          ).grow()
+        }, Styles.grayt) {
+        coll!!.toggle()
+        if (!coll!!.collapse){
+          setupContent(0)
+        }
+      }.growX().fillY()
+
+      res.row()
+      coll = res.add(HeCollapser(collX = false, collY = true, collapsed = true, Styles.grayPanel){ col ->
+        col.table { details ->
+          details.left().defaults().growX().pad(4f).padLeft(12f).padRight(12f)
+
+          details.add(Core.bundle.format("dialog.mods.author", mod.author))
+            .growX().padRight(50f).wrap().color(Pal.accent).labelAlign(Align.left)
+          details.row()
+          details.table { link ->
+            link.left().image(Icon.githubSmall).scaling(Scaling.fit).size(24f).color(Color.lightGray)
+            val linkButton = link.button("...", Styles.nonet) {}
+              .padLeft(4f).wrapLabel(true)
+              .growX().left().align(Align.left).height(30f).disabled(true).get()
+
+            linkButton.label.setAlignment(Align.left)
+            linkButton.label.setFontScale(0.9f)
+
+            val url = "https://github.com/${mod.repo}"
+            linkButton.isDisabled = false
+            linkButton.setText(url)
+            linkButton.clicked { Core.app.openURI(url) }
+          }
+          details.row()
+          details.table { status ->
+            status.left().defaults().left()
+
+            loaded?.also { loaded ->
+              if (loaded.meta.version != mod.version){
+                buildStatus(status, Icon.starSmall, Core.bundle["dialog.mods.newVersion"], HeAssets.lightBlue)
+              }
+              else {
+                buildStatus(status, Icon.okSmall, Core.bundle["dialog.mods.installed"], Pal.heal)
+              }
+            }
+
+            buildModAttrList(status, stat)
+          }
+          details.row()
+          details.line(Color.gray, true, 4f).pad(6f).padLeft(-6f).padRight(-6f)
+          details.row()
+
+          var current = -1
+          details.table { switch ->
+            switch.left().defaults().center()
+            switch.button({ it.add(Core.bundle["dialog.mods.description"], 0.85f) }, switchBut) { setupContent(0) }
+              .margin(12f).checked { current == 0 }.disabled { t -> t.isChecked }
+            switch.button({ it.add(Core.bundle["dialog.mods.rawText"], 0.85f) }, switchBut) { setupContent(1) }
+              .margin(12f).checked { current == 1 }.disabled { t -> t.isChecked }
+          }.grow().padBottom(0f)
+          details.row()
+          details.table(HeAssets.grayUI) { desc ->
+            desc.defaults().grow()
+            setupContent = a@{ i ->
+              if (i == current) return@a
+
+              desc.clearChildren()
+              current = i
+
+              when (i) {
+                0 -> desc.add(Markdown(mod.description, MarkdownStyles.defaultMD))
+                1 -> desc.add(mod.description).wrap()
+              }
+            }
+          }.grow().margin(12f).padTop(0f)
+        }.grow()
+      }.also { it.setDuration(0.3f, Interp.pow3Out) }).growX().fillY().colspan(2).get()
+
+      return res
+    }
+  }
 }
 
-class HeModsBrowser: BaseDialog(Core.bundle["mods.browser"]) {
+private fun buildModAttrIcons(status: Table, stat: Int) {
+  if (stat.isJAR()) status.image(HeAssets.java).scaling(Scaling.fit).color(Pal.reactorPurple)
+    .addTip(Core.bundle["dialog.mods.jarMod"])
+  if (stat.isJS()) status.image(HeAssets.javascript).scaling(Scaling.fit).color(Pal.accent)
+    .addTip(Core.bundle["dialog.mods.jsMod"])
+  if (!stat.isClientOnly()) status.image(Icon.hostSmall).scaling(Scaling.fit).color(Pal.techBlue)
+    .addTip(Core.bundle["dialog.mods.hostMod"])
 
+  if (stat.isDeprecated()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+    .addTip(
+      Core.bundle.format(
+        "dialog.mods.deprecated",
+        if (stat.isJAR()) Vars.minJavaModGameVersion else Vars.minModGameVersion
+      )
+    )
+  else if (stat.isUnsupported()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+    .addTip(Core.bundle["dialog.mods.unsupported"])
+}
+
+fun buildStatus(status: Table, icon: Drawable, information: String, color: Color) {
+  status.image(icon).scaling(Scaling.fit).color(color).size(26f).pad(4f)
+  status.add(information, 0.85f).color(color)
+  status.row()
+}
+
+private fun buildModAttrList(status: Table, stat: Int) {
+  if (stat.isJAR()) {
+    buildStatus(status, HeAssets.java, Core.bundle["dialog.mods.jarMod"], Pal.reactorPurple)
+  }
+  if (stat.isJS()) {
+    buildStatus(status, HeAssets.javascript, Core.bundle["dialog.mods.jsMod"], Pal.accent)
+  }
+  if (!stat.isClientOnly()) {
+    buildStatus(status, Icon.hostSmall, Core.bundle["dialog.mods.hostMod"], Pal.techBlue)
+  }
+
+  if (stat.isDeprecated()) {
+    buildStatus(
+      status, Icon.warningSmall, Core.bundle.format(
+        "dialog.mods.deprecated",
+        if (stat.isJAR()) Vars.minJavaModGameVersion else Vars.minModGameVersion
+      ), Color.crimson
+    )
+  }
+  else if (stat.isUnsupported()) {
+    buildStatus(status, Icon.warningSmall, Core.bundle["dialog.mods.unsupported"], Color.crimson)
+  }
+}
+
+class ModListing {
+  var repo: String = "???"
+  var name: String = "???"
+  var internalName: String = "???"
+  var subtitle: String? = null
+  var author: String = "???"
+  var version: String = "???"
+  var hidden: Boolean = false
+  var lastUpdated: String = "???"
+  var description: String? = null
+  var minGameVersion: String? = null
+  var hasScripts: Boolean = false
+  var hasJava: Boolean = false
+  var stars: Int = 0
+
+  fun checkStatus(): Int {
+    var res = 0
+
+    if (hasJava) res = res or JAR_MOD
+    if (hasScripts) res = res or JS_MOD
+    if (hidden) res = res or CLIENT_ONLY
+
+    if (getMinMajor() < (if (hasJava) Vars.minJavaModGameVersion else Vars.minModGameVersion)) res = res or DEPRECATED
+    if (!Version.isAtLeast(minGameVersion)) res = res or UNSUPPORTED
+
+    return res
+  }
+
+  fun shortDescription(): String {
+    return Strings.truncate(
+      if (subtitle == null) (if (description == null || description!!.length > Vars.maxModSubtitleLength) "" else description) else subtitle,
+      Vars.maxModSubtitleLength,
+      "..."
+    )
+  }
+
+  private fun getMinMajor(): Int {
+    val ver: String = (if (minGameVersion == null) "0" else minGameVersion)!!
+    val dot = ver.indexOf(".")
+    return if (dot != -1) Strings.parseInt(ver.substring(0, dot), 0)
+           else Strings.parseInt(ver, 0)
+  }
+
+  override fun toString(): String {
+    return "ModListing{" +
+       "repo='" + repo + '\'' +
+       ", name='" + name + '\'' +
+       ", internalName='" + internalName + '\'' +
+       ", author='" + author + '\'' +
+       ", version='" + version + '\'' +
+       ", lastUpdated='" + lastUpdated + '\'' +
+       ", description='" + description + '\'' +
+       ", minGameVersion='" + minGameVersion + '\'' +
+       ", hasScripts=" + hasScripts +
+       ", hasJava=" + hasJava +
+       ", stars=" + stars +
+       '}'
+  }
+}
+
+data class Name(
+  val author: String,
+  val name: String,
+){
+  private val hash = author.hashCode()*31 xor 31 + name.hashCode() xor 31
+
+  constructor(loaded: Mods.LoadedMod): this(loaded.meta.author, loaded.name)
+  constructor(loaded: ModListing): this(loaded.author, loaded.internalName)
+
+  override fun hashCode(): Int {
+    return hash
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is Name) return false
+
+    if (author != other.author) return false
+    if (name != other.name) return false
+
+    return true
+  }
+
+  override fun toString() = "$author-$name"
+}
+
+object Lock
+@Suppress("UNCHECKED_CAST")
+fun getModList(
+  index: Int = 0,
+  refresh: Boolean = false,
+  errHandler: Cons<Throwable>? = null,
+  listener: Cons<OrderedMap<Name, ModListing>>
+) {
+  if (index >= He.modJsonURLs.size) return
+  if (refresh) modList = null
+
+  if (modList != null) {
+    listener.get(modList)
+    return
+  }
+
+  exec.submit {
+    synchronized(Lock) {
+      if (modList != null) {
+        Core.app.post {
+          listener.get(modList)
+        }
+        return@synchronized
+      }
+
+      val req = Http.get(He.modJsonURLs[index])
+      req.error { err ->
+        if (index < He.modJsonURLs.size - 1) {
+          getModList(index + 1, false, errHandler, listener)
+        }
+        else {
+          errHandler?.get(err)
+        }
+      }
+      req.block { response ->
+        val strResult = response.getResultAsString()
+        try {
+          modList = OrderedMap()
+          val list = JsonIO.json.fromJson(Seq::class.java, ModListing::class.java, strResult) as Seq<ModListing>
+          val d = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+          val parser = Func { text: String ->
+            try {
+              return@Func d.parse(text)
+            } catch (_: Exception) {
+              return@Func Date()
+            }
+          }
+
+          list.sortComparing { m -> parser.get(m!!.lastUpdated) }.reverse()
+          list.forEach { modList!![Name(it.author, it.internalName)] = it }
+
+          Core.app.post {
+            listener.get(modList)
+          }
+        } catch (e: Exception) {
+          errHandler?.get(e)
+        }
+      }
+    }
+  }
 }

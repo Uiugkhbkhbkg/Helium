@@ -13,6 +13,7 @@ import arc.scene.ui.Tooltip
 import arc.scene.ui.layout.Cell
 import arc.scene.ui.layout.Table
 import arc.util.Strings
+import helium.ui.UIUtils.line
 import helium.ui.dialogs.ModConfigDialog.ConfigLayout
 import mindustry.graphics.Pal
 import mindustry.ui.Styles
@@ -26,10 +27,10 @@ class ConfigSepLine(
 ): ConfigLayout(name) {
   override fun build(table: Table) {
     table.stack(
-      Table { t: Table ->
+      Table { t ->
         t.image().color(lineColor).pad(0f).grow()
         t.row()
-        t.image().color(lineColorBack).pad(0f).height(4f).growX()
+        t.line(lineColorBack, true, 4f)
       },
       Table { t: Table ->
         t.left().add(string, Styles.outlineLabel).fill().left().padLeft(5f)

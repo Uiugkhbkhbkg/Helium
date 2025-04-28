@@ -50,6 +50,8 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
 
   @ConfigItem var enableBetterPlacement = true
 
+  @ConfigItem var enableBetterModsDialog = true
+
   fun load() {
     if (!configFile.exists()) {
       internalConfigFile.copyTo(configFile)

@@ -10,6 +10,8 @@ import arc.graphics.gl.FrameBuffer
 import arc.graphics.gl.Shader
 import arc.math.Mathf
 import arc.math.geom.Vec2
+import kotlin.math.abs
+import kotlin.math.min
 
 @Suppress("DuplicatedCode")
 object DrawUtils {
@@ -196,6 +198,35 @@ object DrawUtils {
     Draw.vert(Core.atlas.white().texture, vertices, 0, vertices.size);
   }
 
+  fun arc(x: Float, y: Float, radius: Float, innerAngel: Float, rotate: Float, scaleFactor: Float = 0.8f) {
+    val sides = 40 + (radius*scaleFactor).toInt()
+
+    val step = 360f/sides
+    val sing = if (innerAngel > 0) 1 else -1
+    val inner = min(abs(innerAngel), 360f)
+
+    val vec = v1
+
+    val n = (inner/step).toInt()
+    val rem = inner - n*step
+    Lines.beginLine()
+
+    vec.set(radius, 0f).setAngle(rotate)
+    Lines.linePoint(x + vec.x, y + vec.y)
+
+    for (i in 0 until n) {
+      vec.set(radius, 0f).setAngle((i + 1)*step*sing + rotate)
+      Lines.linePoint(x + vec.x, y + vec.y)
+    }
+
+    if (rem > 0.1f) {
+      vec.set(radius, 0f).setAngle(inner*sing + rotate)
+      Lines.linePoint(x + vec.x, y + vec.y)
+    }
+
+    Lines.endLine(inner >= 360f - 0.01f)
+  }
+
   fun dashCircle(
     x: Float, y: Float, radius: Float,
     dashes: Int = 8,
@@ -220,7 +251,7 @@ object DrawUtils {
 
   fun circleFan(
     x: Float, y: Float, radius: Float,
-    angle: Float, rotate: Float = 0f, sides: Int = 72
+    angle: Float, rotate: Float = 0f, sides: Int = 72,
   ){
     val step = 360f/sides
     val s = (angle/360*sides).toInt()
@@ -267,7 +298,7 @@ object DrawUtils {
     angle: Float, rotate: Float = 0f,
     innerColor: Color = Draw.getColor(),
     outerColor: Color = innerColor,
-    sides: Int = 72
+    sides: Int = 72,
   ){
     val step = 360f/sides
     val s = (angle/360*sides).toInt()
@@ -376,7 +407,7 @@ object DrawUtils {
     centerX: Float, centerY: Float,
     innerRadius: Float, radius: Float,
     lines: Int, rotate: Float = 0f,
-    totalDeg: Float = 360f, cap: Boolean = false
+    totalDeg: Float = 360f, cap: Boolean = false,
   ){
     val angleStep = totalDeg/lines
 

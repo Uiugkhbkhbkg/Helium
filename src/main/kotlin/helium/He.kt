@@ -7,6 +7,7 @@ import arc.files.Fi
 import arc.func.*
 import arc.scene.Element
 import arc.scene.event.SceneEvent
+import arc.scene.ui.Dialog
 import arc.scene.ui.layout.Table
 import arc.struct.IntMap
 import arc.struct.ObjectFloatMap
@@ -28,6 +29,7 @@ import mindustry.Vars
 import mindustry.game.EventType
 import mindustry.gen.Icon
 import mindustry.graphics.Pal
+import mindustry.ui.Fonts
 import mindustry.ui.Styles
 import mindustry.ui.dialogs.SettingsMenuDialog
 
@@ -44,6 +46,11 @@ object He {
   /**此mod内部名称 */
   const val INTERNAL_NAME: String = "he"
   const val MOD_NAME: String = "Helium"
+
+  val modJsonURLs = arrayOf(
+    "https://raw.githubusercontent.com/EB-wilson/HeMindustryMods/master/mods.json",
+    //"https://cdn.jsdelivr.net/gh/eb-wiilson/hemindustrymods/mods.json"
+  )
 
   /**模组内配置文件存放位置 */
   val internalConfigDir: Fi = modFile.child("config")
@@ -110,7 +117,7 @@ object He {
     setupSettings(configDialog)
 
     heModsDialog = HeModsDialog()
-    Events.on(EventType.ClientLoadEvent::class.java){ heModsDialog.show() }
+    setupHeModsDialog(heModsDialog)
 
     setupGlobalListeners()
 
@@ -123,6 +130,22 @@ object He {
         Styles.flatt,
         32f
       ) { configDialog.show() }.marginLeft(8f).row();
+    }
+  }
+
+  private fun setupHeModsDialog(heModsDialog: HeModsDialog) {
+    Vars.ui.mods.also {
+      it.style = Dialog.DialogStyle().also { s ->
+        s.background = Styles.none
+        s.titleFont = Fonts.def
+      }
+      it.clear()
+      it.shown {
+        Core.app.post {
+          it.hide(null)
+          heModsDialog.show()
+        }
+      }
     }
   }
 
@@ -285,6 +308,17 @@ object He {
       ConfigCheck(
         "enableBetterPlacement",
         config::enableBetterPlacement
+      ),
+
+      ConfigSepLine(
+        "modsDialog",
+        Core.bundle["settings.basic.modsDialog"],
+        Pal.accent,
+        Pal.accentBack
+      ),
+      ConfigCheck(
+        "enableBetterModsDialog",
+        config::enableBetterModsDialog
       ),
     )
     conf.addConfig(

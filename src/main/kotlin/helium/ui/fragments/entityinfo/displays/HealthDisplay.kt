@@ -6,7 +6,6 @@ import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Font
 import arc.graphics.g2d.FontCache
 import arc.graphics.g2d.GlyphLayout
-import arc.math.Mat
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
@@ -67,8 +66,6 @@ class HealthModel: Model<Healthc>{
 }
 
 class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
-  private val trans = Mat()
-
   lateinit var style: HealthBarStyle
 
   override val layoutSide: Side = Side.TOP
@@ -150,7 +147,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     )
 
     style.shieldBar?.also {
-      val n = Mathf.ceil(insectShield/entity.maxHealth())
+      val n = max(Mathf.ceil(insectShield/entity.maxHealth()), 0)
       val insProgShield = (insectShield%entity.maxHealth())/entity.maxHealth()
       val r = if (Vars.state.isPaused) 0f else Mathf.absin(8f, 0.5f)
 
@@ -199,7 +196,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     }
   }
 
-  private fun shieldColor(teamC: Color, n: Int): Color = when(n % 3) {
+  private fun shieldColor(teamC: Color, n: Int): Color = when(Mathf.mod(n, 3)) {
     0 -> if (teamC.diff(Pal.reactorPurple) < 0.1f) Pal.heal else Pal.reactorPurple
     1 -> if (teamC.diff(Pal.accent) < 0.1f) HeAssets.lightBlue else Pal.accent
     2 -> if (teamC.diff(Pal.heal) < 0.1f) Pal.lancerLaser else Pal.heal

@@ -52,7 +52,7 @@ import kotlin.math.min
 class EntityInfoFrag {
   companion object {
     private val tempEntry = EntityEntry()
-
+    private val tmp = Vec2()
     private val outerStyle = HeStyles.clearS.copyWith(
       over = FillStripDrawable (
         Pal.accent.cpy().a(0.7f),
@@ -594,8 +594,10 @@ class EntityInfoFrag {
       }
     }
 
-    if (!displayQueue.isEmpty) displayQueue
-      .sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(Core.input.mouseWorld()) }
+    if (!displayQueue.isEmpty) {
+      val v = tmp.set(Core.input.mouseWorld())
+      displayQueue.sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(v) }
+    }
   }
 
   @Suppress("UNCHECKED_CAST")
