@@ -165,11 +165,13 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                 browser.show()
               }.margin(8f)
               pane.row()
-              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){  }
-                .margin(8f)
+              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){
+                importFile()
+              }.margin(8f)
               pane.row()
-              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){  }
-                .margin(8f)
+              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){
+                importGithub()
+              }.margin(8f)
               pane.row()
 
               pane.add(Core.bundle["dialog.mods.otherHandle"]).color(Color.gray)
@@ -177,13 +179,10 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
               pane.row()
               pane.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
-              {  }
+              { generateModsList() }
               pane.row()
               pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
-              {
-                if (Core.app.isMobile)
-                else Core.app.openFolder(Vars.modDirectory.absolutePath())
-              }
+              { openFolder() }
               pane.row()
               pane.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
               { Core.app.openURI(modGuideURL) }
@@ -194,7 +193,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           list.row()
           list.pane(Styles.smallPane) { pane ->
             pane.table { en ->
-              en.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent)
+              en.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
               en.row()
               en.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
               en.row()
@@ -204,7 +203,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             }.margin(6f).growX().fillY()
             pane.row()
             pane.table { di ->
-              di.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent)
+              di.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
               di.row()
               di.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
               di.row()
@@ -277,10 +276,12 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             top.button(Core.bundle["mods.browser"], Icon.planet, Styles.flatBordert, 46f){
               browser.show()
             }.margin(8f)
-            top.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){  }
-              .margin(8f)
-            top.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){  }
-              .margin(8f)
+            top.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){
+              importFile()
+            }.margin(8f)
+            top.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){
+              importGithub()
+            }.margin(8f)
           }.growX().fillY().padBottom(6f)
           buttons.row()
           buttons.table { bot ->
@@ -290,12 +291,9 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f)
             { refresh() }
             bot.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
-            {  }
+            { generateModsList() }
             bot.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
-            {
-              if (Core.app.isMobile)
-              else Core.app.openFolder(Vars.modDirectory.absolutePath())
-            }
+            { openFolder() }
             bot.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
             { Core.app.openURI(modGuideURL) }
           }.growX().fillY()
@@ -621,6 +619,146 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     }
   }
 
+  private fun generateModsList() {
+    //TODO
+    UIUtils.showTip(
+      Core.bundle["infos.wip"],
+      Core.bundle["infos.notImplementYet"]
+    )
+  }
+
+  private fun openFolder() {
+    val path = Vars.modDirectory.absolutePath()
+
+    if (Core.app.isMobile) {
+      UIUtils.showPane(
+        Core.bundle["dialog.mods.openFolderFailed"],
+        closeBut,
+        ButtonEntry(Core.bundle["misc.copy"], Icon.copy) {
+          Core.app.clipboardText = path
+          Vars.ui.showInfoFade(Core.bundle["infos.copied"])
+        }
+      ){ t ->
+        t.add(Core.bundle["dialog.mods.cantOpenOnAndroid"]).growX().pad(6f).left()
+          .labelAlign(Align.left).color(Color.lightGray)
+        t.row()
+        t.table(HeAssets.darkGrayUIAlpha) { l ->
+          l.image(Icon.folder).scaling(Scaling.fit).pad(6f).size(36f)
+          l.add(path).pad(6f)
+        }.margin(12f)
+      }
+    }
+    else Core.app.openFolder(path)
+  }
+
+  private fun importGithub() {
+    var tipLabel: Label? = null
+
+    UIUtils.showInput(
+      Core.bundle["mod.import.github"],
+      Core.bundle["dialog.mods.inputGithubLink"],
+      buildContent = {
+        tipLabel = it.add("").growX().labelAlign(Align.left).pad(8f).get()
+      }
+    ){ dialog, txt ->
+      tipLabel?.setText(Core.bundle["dialog.mods.parsing"])
+      tipLabel?.setColor(Pal.accent)
+      val link = if (txt.startsWith("https://")) txt.substring(8) else txt
+      if (link.startsWith("github.com/")){
+        val repo = link.substring(11)
+        Http.get(
+          Vars.ghApi + "/repos/" + repo + "/releases/latest",
+          { res ->
+            if (res.status != Http.HttpStatus.OK) throw Exception("not found")
+            val jval = Jval.read(res.getResultAsString())
+            val tagLink = "https://raw.githubusercontent.com/${repo}/${jval.getString("tag_name")}"
+
+            val modJ = tryList(
+              "$tagLink/mod.json",
+              "$tagLink/mod.hjson",
+              "$tagLink/assets/mod.json",
+              "$tagLink/assets/mod.hjson",
+            )
+
+            if (modJ == null) throw Exception("not found")
+
+            var repoMeta: Jval? = null
+            Http.get(Vars.ghApi + "/repos/" + repo)
+              .error {
+                tipLabel?.setText(Core.bundle["dialog.mods.parseFailed"])
+                tipLabel?.setColor(Color.crimson)
+              }
+              .block { repoMeta = Jval.read(it.getResultAsString()) }
+
+            repoMeta!!
+            val lang = repoMeta.getString("language", "")
+
+            val modInfo = ModListing().also {
+              it.repo = repo
+              it.internalName = modJ.getString("name")
+              it.name = modJ.getString("displayName")
+              it.subtitle = modJ.getString("subtitle")
+              it.author = modJ.getString("author")
+              it.version = modJ.getString("version")
+              it.hidden = modJ.getBool("hidden", false)
+              it.lastUpdated = repoMeta.getString("pushed_at")
+              it.stars = repoMeta.getInt("stargazers_count", 0)
+              it.description = modJ.getString("description")
+              it.minGameVersion = modJ.getString("minGameVersion")
+              it.hasScripts = lang == "JavaScript"
+              it.hasJava = modJ.getBool("java", false)
+                           || lang == "Java"
+                           || lang == "Kotlin"
+                           || lang == "Groovy"
+                           || lang == "Scala"
+            }
+
+            Core.app.post {
+              dialog!!.hide()
+              downloadMod(modInfo)
+            }
+          }
+        ){
+          Core.app.post {
+            if (it is IllegalArgumentException) tipLabel?.setText(Core.bundle["dialog.mods.parseFailed"])
+            else tipLabel?.setText(Core.bundle["dialog.mods.checkFailed"])
+            tipLabel?.setColor(Color.crimson)
+          }
+        }
+      }
+      else {
+        tipLabel?.setText(Core.bundle["dialog.mods.parseFailed"])
+        tipLabel?.setColor(Color.crimson)
+      }
+    }
+  }
+
+  private fun tryList(vararg queries: String): Jval? {
+    var result: Jval? = null
+    for (str in queries) {
+      Http.get(str)
+        .timeout(10000)
+        .block { out -> result = Jval.read(out!!.getResultAsString()) }
+      if (result != null) return result
+    }
+    return null
+  }
+
+  private fun importFile() {
+    Vars.platform.showMultiFileChooser({ file ->
+      try {
+        Vars.mods.importMod(file)
+        modTabs.clear()
+        rebuildMods()
+      } catch (e: java.lang.Exception) {
+        Log.err(e)
+        UIUtils.showException(
+          e, if (e.message != null && e.message!!.lowercase().contains("writable dex")) "@error.moddex" else ""
+        )
+      }
+    }, "zip", "jar")
+  }
+
   private fun deleteMod(mod: Mods.LoadedMod) {
     if (Name(mod) == Name("EBwilson", "he")) {
       UIUtils.showConfirm(Core.bundle["dialog.mods.deleteMod"], Core.bundle["dialog.mods.confirmDeleteHe"]) {
@@ -778,35 +916,65 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         cont.table(Tex.buttonSelect) { icon ->
           icon.image(image).scaling(Scaling.fit).size(80f)
         }.pad(10f).margin(4f).size(88f)
-        cont.table { info ->
-          info.left().top().defaults().left().pad(3f)
-          info.add(modInfo.name).color(Pal.accent)
-          info.row()
-          if (loaded != null) {
-            if (loaded.meta.version != modInfo.version) {
-              info.add("[lightgray]${loaded.meta.version}  >>>  [accent]${modInfo.version}")
+        cont.stack(
+          Table { info ->
+            info.left().top().defaults().left().pad(3f)
+            info.add(modInfo.name).color(Pal.accent)
+            info.row()
+            if (loaded != null) {
+              if (loaded.meta.version != modInfo.version) {
+                info.add("[lightgray]${loaded.meta.version}  >>>  [accent]${modInfo.version}")
+              }
+              else {
+                info.add("[lightgray]${loaded.meta.version}  >>>  ${modInfo.version}" + Core.bundle["dialog.mods.reinstall"])
+              }
             }
-            else {
-              info.add("[lightgray]${loaded.meta.version}  >>>  ${modInfo.version}" + Core.bundle["dialog.mods.reinstall"])
+            else info.add(modInfo.version)
+            info.row()
+            info.table{ b ->
+              b.add(Bar(
+                {
+                  if (complete) Core.bundle["dialog.mods.downloadComplete"]
+                  else Core.bundle.format(
+                    "dialog.mods.downloading",
+                    if (progress < 0) (-progress).toStoreSize()
+                    else "${Mathf.round(progress*100)}%"
+                  )
+                },
+                { Pal.accent },
+                { if (progress < 0) 1f else progress }
+              )).growX().pad(6f).height(22f).visible { downloading }
+            }.grow()
+          },
+          Table { info ->
+            info.top().right().defaults().right().top()
+            info.table { status ->
+              status.top().right().defaults().size(26f).pad(4f)
+              val stat = modInfo.checkStatus()
+
+              buildModAttrIcons(status, stat)
+            }.fill()
+            info.row()
+            info.table { stars ->
+              stars.bottom().right()
+              stars.add(object : Element(){
+                override fun draw() {
+                  validate()
+                  Draw.color(Color.darkGray)
+                  Icon.starSmall.draw(
+                    x - width*0.2f, y - height*0.2f,
+                    0f, 0f, width, height,
+                    1.4f, 1.4f, 0f
+                  )
+                  Draw.color(Color.white)
+                  Icon.starSmall.draw(x, y, width, height)
+                }
+              }).size(60f).pad(-16f)
+              stars.add(modInfo.stars.toString(), Styles.outlineLabel, 0.85f)
+                .bottom().padBottom(4f).padLeft(-2f)
             }
           }
-          else info.add(modInfo.version)
-          info.row()
-          info.table{ b ->
-            b.add(Bar(
-              {
-                if (complete) Core.bundle["dialog.mods.downloadComplete"]
-                else Core.bundle.format(
-                  "dialog.mods.downloading",
-                  if (progress < 0) (-progress).toStoreSize()
-                  else "${Mathf.round(progress*100)}%"
-                )
-              },
-              { Pal.accent },
-              { if (progress < 0) 1f else progress }
-            )).growX().pad(6f).height(22f).visible { downloading }
-          }.grow()
-        }.pad(12f).padLeft(4f).growX().fillY().minWidth(420f)
+        ).pad(12f).padLeft(4f).growX().fillY().minWidth(420f)
       }.margin(6f).growX().fillY()
     }
   }
@@ -865,7 +1033,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
   inner class HeModsBrowser: BaseDialog(Core.bundle["mods.browser"]) {
     private lateinit var rebuildList: () -> Unit
 
-    private val bowserTab = ObjectMap<ModListing, Table>()
+    private val browserTabs = ObjectMap<ModListing, Table>()
     private val favoritesMods = Seq<ModListing>()
 
     private var search = ""
@@ -996,23 +1164,31 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           { hide() }
           bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f) {
             modList = null
-            bowserTab.clear()
+            browserTabs.clear()
 
             rebuildList()
           }
           if (Core.graphics.isPortrait) bot.row()
           bot.button(Core.bundle["dialog.mods.importFav"], Icon.download, Styles.grayt, 46f) {
-
+            //TODO
+            UIUtils.showTip(
+              Core.bundle["infos.wip"],
+              Core.bundle["infos.notImplementYet"]
+            )
           }
           bot.button(Core.bundle["dialog.mods.exportFav"], Icon.export, Styles.grayt, 46f) {
-
+            //TODO
+            UIUtils.showTip(
+              Core.bundle["infos.wip"],
+              Core.bundle["infos.notImplementYet"]
+            )
           }
         }.growX().fillY()
       }.grow()
     }
 
     private fun buildModTab(mod: ModListing): Table {
-      bowserTab[mod]?.also { return it }
+      browserTabs[mod]?.also { return it }
 
       val res = Table()
       val stat = mod.checkStatus()
@@ -1020,7 +1196,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
       var setupContent = { i: Int -> }
       val key = "mod.favorites.${mod.internalName}"
 
-      bowserTab[mod] = res
+      browserTabs[mod] = res
 
       val iconLink = "https://raw.githubusercontent.com/Anuken/MindustryMods/master/icons/" + mod.repo.replace("/", "_")
       val image = Downloader.downloadImg(iconLink, Core.atlas.find("nomap"))
@@ -1031,9 +1207,9 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           top.table(Tex.buttonSelect) { icon ->
             icon.stack(
               Image(TextureRegionDrawable(image)).setScaling(Scaling.fit),
-              Table { starts ->
-                starts.bottom().left()
-                starts.add(object : Element(){
+              Table { stars ->
+                stars.bottom().left()
+                stars.add(object : Element(){
                   override fun draw() {
                     validate()
                     Draw.color(Color.darkGray)
@@ -1046,7 +1222,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                     Icon.starSmall.draw(x, y, width, height)
                   }
                 }).size(60f).pad(-16f)
-                starts.add(mod.stars.toString(), Styles.outlineLabel, 0.85f)
+                stars.add(mod.stars.toString(), Styles.outlineLabel, 0.85f)
                   .bottom().padBottom(4f).padLeft(-2f)
               }
             ).size(80f)
@@ -1094,7 +1270,10 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
                   buttons.row()
                   buttons.button(Icon.downloadSmall, Styles.clearNonei, 48f) {
-                    downloadMod(mod)
+                    downloadMod(mod){
+                      browserTabs.clear()
+                      rebuildList()
+                    }
                   }
                   buttons.row()
 
@@ -1323,7 +1502,7 @@ fun getModList(
   index: Int = 0,
   refresh: Boolean = false,
   errHandler: Cons<Throwable>? = null,
-  listener: Cons<OrderedMap<Name, ModListing>>
+  listener: Cons<OrderedMap<Name, ModListing>>,
 ) {
   if (index >= He.modJsonURLs.size) return
   if (refresh) modList = null
@@ -1348,7 +1527,9 @@ fun getModList(
           getModList(index + 1, false, errHandler, listener)
         }
         else {
-          errHandler?.get(err)
+          Core.app.post {
+            errHandler?.get(err)
+          }
         }
       }
       req.block { response ->
@@ -1372,7 +1553,9 @@ fun getModList(
             listener.get(modList)
           }
         } catch (e: Exception) {
-          errHandler?.get(e)
+          Core.app.post {
+            errHandler?.get(e)
+          }
         }
       }
     }

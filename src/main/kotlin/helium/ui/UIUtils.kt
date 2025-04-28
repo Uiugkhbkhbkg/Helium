@@ -3,6 +3,7 @@ package helium.ui
 import arc.Core
 import arc.func.Boolp
 import arc.func.Cons
+import arc.func.Cons2
 import arc.func.Prov
 import arc.graphics.Color
 import arc.scene.style.Drawable
@@ -10,6 +11,7 @@ import arc.scene.ui.Dialog
 import arc.scene.ui.Image
 import arc.scene.ui.layout.Cell
 import arc.scene.ui.layout.Table
+import arc.util.Align
 import arc.util.Strings
 import helium.invoke
 import mindustry.gen.Icon
@@ -39,6 +41,40 @@ object UIUtils {
   ){ t ->
     t.add(message)
     t.row()
+  }
+
+  fun showInput(
+    title: String?,
+    message: String,
+    area: Boolean = false,
+    buildContent: Cons<Table>? = null,
+    callback: Cons2<Dialog, String>
+  ): Dialog {
+    var text = ""
+
+    return showPane(
+      title,
+      cancelBut,
+      ButtonEntry(Core.bundle["confirm"], Icon.ok) {
+        callback(it, text)
+      },
+    ){ info ->
+      info.add(message).growX().labelAlign(Align.left)
+      info.row()
+      info.table{ inp ->
+        val field = if (area) inp.area(""){ text = it }.grow().get()
+        else inp.field(""){ text = it }.growX().fillY().get()
+
+        inp.button(Icon.paste, Styles.clearNonei, 32f) {
+          field.text = Core.app.clipboardText
+          text = field.text
+        }.size(48f)
+      }.grow()
+      buildContent?.also {
+        info.row()
+        info.table(it).growX().fillY()
+      }
+    }
   }
 
   fun showTip(title: String?, message: String, callback: Runnable? = null) = showPane(
