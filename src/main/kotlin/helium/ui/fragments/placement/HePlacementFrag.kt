@@ -76,6 +76,11 @@ class HePlacementFrag {
   private val invSlots = Seq<InvSlot>()
   private var currentSlot: InvSlot? = null
   private var invPage = 0
+    set(value) {
+      field = value
+      invAnimateActivating = true
+      invAnimateProgress = 0f
+    }
 
   private lateinit var topLevel: Table
   private lateinit var container: Table
@@ -96,7 +101,6 @@ class HePlacementFrag {
   private lateinit var foldTools: HeCollapser
   private lateinit var foldIcon: Group
 
-  private var lastPage = 0
   private var invAnimateActivating = false
   private var invAnimateProgress = 0f
 
@@ -118,7 +122,7 @@ class HePlacementFrag {
     icon: Drawable,
     checked: Boolp? = null,
     tip: Prov<String>? = null,
-    listener: Runnable
+    listener: Runnable,
   ) {
     addTool(name, { icon }, checked, tip, listener)
   }
@@ -128,7 +132,7 @@ class HePlacementFrag {
     icon: Prov<Drawable>,
     checked: Boolp? = null,
     tip: Prov<String>? = null,
-    listener: Runnable
+    listener: Runnable,
   ) {
     toolEntries.put(name, ToolEntry(icon, checked, tip, listener))
     toolsTable?.also { rebuildTools(it) }
@@ -498,12 +502,6 @@ class HePlacementFrag {
       }
     }
 
-    if (!invAnimateActivating && lastPage != invPage){
-      lastPage = invPage
-      invAnimateActivating = true
-      invAnimateProgress = 0f
-    }
-
     if (invAnimateActivating) {
       invAnimateProgress = Mathf.approachDelta(invAnimateProgress, 1f, 0.06f)
 
@@ -675,16 +673,63 @@ class HePlacementFrag {
 
     table.row()
 
-    table.button(Icon.refresh, Styles.clearNonei, 28f){
+    val event = InputEvent()
+    fun listen(b: ImageButton, key: KeyCode) {
+      if (Core.input.keyDown(key)) {
+        for (listener in b.listeners) {
+          if (listener is ClickListener) {
+            listener.touchDown(event, 0f, 0f, 0, listener.button)
+          }
+        }
+      }
+      if (Core.input.keyRelease(key)) {
+        for (listener in b.listeners) {
+          if (listener is ClickListener) {
+            listener.touchUp(event, 0f, 0f, 0, listener.button)
+          }
+        }
+      }
+    }
+
+    event.listenerActor = table.button(Icon.refresh, Styles.clearNonei, 24f){
       if (invAnimateActivating) return@button
 
       invPage = (invPage + 1)%3
       currentSlot = null
+    }.update { b -> listen(b, config.switchFastPageHotKey) }.get().also {
+      if (Core.app.isDesktop) {
+        it.fill { x, y, w, h ->
+          Fonts.outline.draw(
+            config.switchFastPageHotKey.value,
+            x, y + h - Fonts.outline.capHeight*0.6f,
+            Color.white, 0.65f, true,
+            Align.left
+          )
+        }
+      }
     }
 
-    foldIcon = table.button(Icon.leftOpen, Styles.clearNonei, 28f){
-      toggleSelectionShown()
-    }.get()
+    table.stack(
+      ImageButton(Icon.leftOpen, Styles.clearNonei).also {
+        foldIcon = it
+        it.resizeImage(28f)
+        it.clicked { toggleSelectionShown() }
+        it.update { listen(it, config.placementFoldHotKey) }
+      },
+      object: Element(){
+        override fun draw() {
+          validate()
+          if (Core.app.isDesktop) {
+            Fonts.outline.draw(
+              config.placementFoldHotKey.value,
+              x, y + height - Fonts.outline.capHeight*0.65f,
+              Color.white, 0.65f, true,
+              Align.left
+            )
+          }
+        }
+      }.also { it.touchable = Touchable.disabled }
+    )
   }
 
   private fun toggleSelectionShown() {
@@ -891,8 +936,8 @@ class HePlacementFrag {
       if (Core.app.isDesktop) {
         Fonts.outline.draw(
           numKey.value,
-          x, y + height - Fonts.outline.capHeight*0.6f,
-          Color.white, 0.6f, true,
+          x, y + height - Fonts.outline.capHeight*0.65f,
+          Color.white, 0.65f, true,
           Align.left
         )
       }
@@ -906,7 +951,7 @@ private class ToolEntry(
   val icon: Prov<Drawable>,
   val checked: Boolp?,
   val hoverTip: Prov<String>?,
-  val listener: Runnable
+  val listener: Runnable,
 ) {
   var shown: Boolean = true
 }

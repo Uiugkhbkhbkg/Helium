@@ -21,6 +21,8 @@ import mindustry.ui.Styles
 object HeStyles {
   lateinit var BLUR_BACK: Drawable
 
+  lateinit var blurStrip: StripDrawable
+
   lateinit var none: StripDrawable
   lateinit var black: StripDrawable
   lateinit var black9: StripDrawable
@@ -87,6 +89,26 @@ object HeStyles {
         }
 
         Styles.black5.draw(x, y, originX, originY, width, height, scaleX, scaleY, rotation)
+      }
+    }
+
+    blurStrip = object: FillStripDrawable(Color.white){
+      override fun draw(
+        originX: Float,
+        originY: Float,
+        angle: Float,
+        distance: Float,
+        angleDelta: Float,
+        stripWidth: Float,
+      ) {
+        drawingCounter++
+        if (drawingCounter == lastDialogs) uiBlur.directDraw {
+          super.draw(
+            originX, originY,
+            angle, distance,
+            angleDelta, stripWidth,
+          )
+        }
       }
     }
 

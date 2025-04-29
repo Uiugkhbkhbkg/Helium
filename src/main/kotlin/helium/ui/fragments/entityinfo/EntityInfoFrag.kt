@@ -191,20 +191,26 @@ class EntityInfoFrag {
     var current: EntityInfoDisplay<*>? = null
     val teams = Vars.state.teams.active
     val stack = Stack()
+    stack.addEventBlocker()
 
-    val radius = min(min(Core.graphics.width, Core.graphics.height)/2f - Scl.scl(40f), Scl.scl(340f))
-    val r1 = radius/2.8f
-    val r2 = radius/1.75f
-    val r3 = radius
-    val r4 = radius*1.32f
+    val radius = min(min(Core.graphics.width, Core.graphics.height)/2f - Scl.scl(40f), Scl.scl(460f))
+    val r1 = radius*0.3f
+    val r2 = radius*0.44f
+    val r3 = radius*0.76f
+    val r4 = radius
     val off = Scl.scl(3f)
 
+    stack.add(StripWrap(background = HeStyles.blurStrip).also {
+      it.setCBounds(
+        0f, 0f,
+        360f, r3
+      )
+    })
     stack.add(StripWrap(background = HeStyles.black5).also {
       it.setCBounds(
         0f, 0f,
-        360f, radius
+        360f, r3
       )
-      it.addEventBlocker()
     })
 
     stack.add(StripButton(HeStyles.clearS){
@@ -217,7 +223,6 @@ class EntityInfoFrag {
         120f, r1 - off
       )
       it.clicked { disabledTeams.values().forEach { bits -> Arrays.fill(bits.bits, -0x1L) } }
-      it.addEventBlocker()
     })
     stack.add(StripButton(HeStyles.clearS){
       it.image(Icon.filters).size(42f).scaling(Scaling.fit)
@@ -242,7 +247,6 @@ class EntityInfoFrag {
       it.clicked {
         disabledTeams.values().forEach { bits -> Arrays.fill(bits.bits, 0) }
       }
-      it.addEventBlocker()
     })
     stack.add(StripWrap(background = HeAssets.whiteEdge).also {
       it.setColor(Pal.darkestGray)
@@ -296,7 +300,6 @@ class EntityInfoFrag {
         it.setDisabled { current == null }
         it.update { it.isChecked = current?.let { dis -> !disabledTeams[dis].get(team.team.id) }?: false }
         it.clicked { disabledTeams[current!!].flip(team.team.id) }
-        it.addEventBlocker()
       })
     }
 
@@ -316,7 +319,6 @@ class EntityInfoFrag {
         )
         it.update { it.isChecked = current == dis }
         it.clicked { current = dis }
-        it.addEventBlocker()
       })
       if (dis is ConfigurableDisplay){
         stack.add(StripWrap(background = HeStyles.black5).also {
@@ -342,7 +344,6 @@ class EntityInfoFrag {
               )
               conf.checked?.also { ch -> it.update { it.isChecked = ch.get() } }
               it.clicked { conf.callback.run() }
-              it.addEventBlocker()
             })
             stack.add(StripWrap(background = HeAssets.whiteEdge).also {
               it.setColor(Pal.darkestGray)

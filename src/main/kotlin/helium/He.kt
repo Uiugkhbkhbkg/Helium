@@ -225,10 +225,12 @@ object He {
       "controlEntityInfoShow",
       Icon.effect,
       { entityInfo.controlling || Core.input.keyDown(config.entityInfoHotKey) },
+      { Core.bundle["tools.tip.ctrlEntityInfo"] }
     ){ entityInfo.controlling = !entityInfo.controlling }
     frag.addTool(
       "entityInfoSwitches",
-      Icon.settings
+      Icon.settings,
+      tip = { Core.bundle["tools.tip.configEntityInfo"] },
     ){ entityInfo.toggleSwitchConfig() }
   }
 
@@ -342,7 +344,26 @@ object He {
     )
     conf.addConfig(
       "keyBind", Icon.grid,
-
+      ConfigSepLine(
+        "entityInfo",
+        Core.bundle["settings.keyBind.entityInfo"],
+      ),
+      ConfigKeyBind(
+        "entityInfoHotKey",
+        config::entityInfoHotKey
+      ),
+      ConfigSepLine(
+        "placement",
+        Core.bundle["settings.keyBind.placement"],
+      ),
+      ConfigKeyBind(
+        "placementFoldHotKey",
+        config::placementFoldHotKey
+      ),
+      ConfigKeyBind(
+        "switchFastPageHotKey",
+        config::switchFastPageHotKey
+      ),
     )
     conf.addConfig(
       "debug", HeAssets.program,
