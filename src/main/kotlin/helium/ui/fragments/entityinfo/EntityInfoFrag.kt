@@ -526,15 +526,13 @@ class EntityInfoFrag {
 
     currHov.clear()
 
-    Groups.all.forEach { entity ->
-      if (entity !is Teamc) return@forEach
-
+    fun letEntity(entity: Teamc) {
       val e = tempEntry
       e.entity = entity
 
       val ent = all.get(e)
       if (ent == null) {
-        val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
+        val entry = Pools.obtain(EntityEntry::class.java) { EntityEntry() }
         entry.entity = entity
 
         assignDisplayModels(entry)
@@ -555,6 +553,28 @@ class EntityInfoFrag {
 
         if (ent.isValid && checkHovering(entity)) {
           currHov.add(ent)
+        }
+      }
+    }
+
+    Groups.all.forEach { entity ->
+      if (entity !is Teamc) return@forEach
+
+      letEntity(entity)
+    }
+
+    val x1 = (selectionRect.x/Vars.tilesize).toInt()
+    val y1 = (selectionRect.y/Vars.tilesize).toInt()
+    val x2 = ((selectionRect.x + selectionRect.width)/Vars.tilesize).toInt()
+    val y2 = ((selectionRect.y + selectionRect.height)/Vars.tilesize).toInt()
+    (x1..x2).forEach { x ->
+      (y1..y2).forEach n@{ y ->
+        val build = Vars.world.build(x, y)
+        build?.also {
+          val e = tempEntry
+          e.entity = it
+          if (currHov.contains(e)) return@n
+          letEntity(it)
         }
       }
     }
@@ -615,7 +635,9 @@ class EntityInfoFrag {
             if (display is InputEventChecker<*>) {
               display as InputEventChecker<InputCheckerModel<*>>
               model as InputCheckerModel<*>
-              model.element = display.run { model.buildListener().also { infoFill.addChild(it) } }
+              model.element = display.run { model.buildListener().also {
+                infoFill.addChild(it)
+              } }
             }
             model
           }
@@ -673,8 +695,6 @@ class EntityInfoFrag {
   private fun drawHUDLay() {
     val scale = config.entityInfoScale
     val alpha = config.entityInfoAlpha
-    val maxSizeMul = 6
-    val minSizeMul = 2
 
     Draw.sort(true)
     for (i in displayQueue.size - 1 downTo 0) {
@@ -740,6 +760,10 @@ class EntityInfoFrag {
             (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
             || !model.shouldDisplay()
           ) return@f
+
+          val maxSizeMul = maxSizeMultiple
+          val minSizeMul = minSizeMultiple
+
           when (layoutSide) {
             CENTER -> {
               val disW = centerWith*scale
@@ -750,7 +774,8 @@ class EntityInfoFrag {
             RIGHT -> {
               val w = model.realWidth(rightHeight)
               val h = model.realHeight(rightHeight)
-              val scl = min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
+              val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
+              else min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
@@ -761,7 +786,8 @@ class EntityInfoFrag {
             TOP -> {
               val w = model.realWidth(topWidth)
               val h = model.realHeight(topWidth)
-              val scl = min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
+              val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
+              else min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop, disW, disH))
@@ -772,7 +798,8 @@ class EntityInfoFrag {
             LEFT -> {
               val w = model.realWidth(leftHeight)
               val h = model.realHeight(leftHeight)
-              val scl = min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
+              val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
+              else min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
@@ -783,7 +810,8 @@ class EntityInfoFrag {
             BOTTOM -> {
               val w = model.realWidth(bottomWidth)
               val h = model.realHeight(bottomWidth)
-              val scl = min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
+              val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
+              else min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
               if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))

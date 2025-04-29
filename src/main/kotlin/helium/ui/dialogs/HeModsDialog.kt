@@ -26,6 +26,7 @@ import arc.util.*
 import arc.util.serialization.Jval
 import helium.He
 import helium.addEventBlocker
+import helium.invoke
 import helium.set
 import helium.ui.ButtonEntry
 import helium.ui.HeAssets
@@ -219,7 +220,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         main.table{ but ->
           but.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
           { hide() }.height(58f).pad(6f).growX()
-          but.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f)
+          but.button(Core.bundle["dialog.mods.refresh"], Icon.refresh, Styles.grayt, 46f)
           { refresh() }.height(58f).pad(6f).growX()
         }.growX().fillY()
       }
@@ -288,7 +289,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             bot.defaults().growX().height(62f).pad(4f)
             bot.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
             { hide() }
-            bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f)
+            bot.button(Core.bundle["dialog.mods.refresh"], Icon.refresh, Styles.grayt, 46f)
             { refresh() }
             bot.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
             { generateModsList() }
@@ -369,8 +370,14 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
             buildModAttrIcons(status, stat)
 
+            val failed = Cons<Throwable> {
+              checkUpdate.drawable = Icon.warningSmall
+              checkUpdate.setColor(Pal.redDust)
+              updateTip!!.setText(Core.bundle["dialog.mods.checkUpdateFailed"])
+            }
+
             if (stat.isValid()) {
-              checkModUpdate(mod){ res ->
+              checkModUpdate(mod, failed){ res ->
                 if (res.updateValid) stat = stat or UP_TO_DATE
 
                 if (stat.isUpToDate()) {
@@ -389,7 +396,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               }
             }
             else {
-              checkModUpdate(mod){ res ->
+              checkModUpdate(mod, failed){ res ->
                 if (res.latestMod == null) {
                   checkUpdate.drawable = Icon.infoCircleSmall
                   checkUpdate.setColor(Pal.orangeSpark)
@@ -413,7 +420,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                 .addTip(Core.bundle["dialog.mods.libMissing"])
               else if (stat.isLibIncomplete()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
                 .addTip(Core.bundle["dialog.mods.libIncomplete"])
-              else if (stat.isLibCircleDepending()) status.image(Icon.rotate).scaling(Scaling.fit).color(Color.crimson)
+              else if (stat.isLibCircleDepending()) status.image(Icon.refresh).scaling(Scaling.fit).color(Color.crimson)
                 .addTip(Core.bundle["dialog.mods.libCircleDepending"])
 
               if (stat.isError()) status.image(Icon.cancelSmall).scaling(Scaling.fit).color(Color.crimson)
@@ -556,8 +563,8 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               current = i
 
               when(i){
-                0 -> desc.add(Markdown(mod.meta.description, MarkdownStyles.defaultMD))
-                1 -> desc.add(mod.meta.description).wrap()
+                0 -> desc.add(Markdown(mod.meta.description?:"", MarkdownStyles.defaultMD))
+                1 -> desc.add(mod.meta.description?:"").wrap()
                 2 -> {
                   Core.app.post {
                     val n = (desc.width/Scl.scl(50f)).toInt()
@@ -657,8 +664,10 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     UIUtils.showInput(
       Core.bundle["mod.import.github"],
       Core.bundle["dialog.mods.inputGithubLink"],
-      buildContent = {
-        tipLabel = it.add("").growX().labelAlign(Align.left).pad(8f).get()
+      buildContent = { cont ->
+        cont.add(HeCollapser(collX = false, collY = true, collapsed = true){
+          tipLabel = it.add("").growX().labelAlign(Align.left).pad(8f).get()
+        }.setDuration(0.3f, Interp.pow3Out).setCollapsed { tipLabel?.text?.isBlank()?:true }).fillY().growX()
       }
     ){ dialog, txt ->
       tipLabel?.setText(Core.bundle["dialog.mods.parsing"])
@@ -979,7 +988,11 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     }
   }
 
-  private fun checkModUpdate(mod: Mods.LoadedMod, callback: (UpdateEntry) -> Unit) {
+  private fun checkModUpdate(
+    mod: Mods.LoadedMod,
+    errorHandler: Cons<Throwable>,
+    callback: Cons<UpdateEntry>
+  ) {
     val res = updateChecked.get(mod)
     if (res != null) callback(res)
     else {
@@ -987,6 +1000,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         errHandler = { e ->
           Log.err(e)
           UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+          errorHandler(e)
         }
       ) { list ->
         val modInfo = list[Name(mod)]
@@ -1103,9 +1117,9 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
               fav.row()
 
+              fav.defaults().width(540f).fillY().pad(6f)
               favCols = Array(n) {
-                fav.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }
-                  .width(540f).growY().pad(6f).get()
+                fav.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
               }
             }
             list.row()
@@ -1113,10 +1127,12 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             list.row()
             list.line(Pal.accent, true, 4f).pad(6f).padLeft(-4f).padRight(-4f)
             list.row()
-            list.table { norm -> normCols = Array(n) {
-              norm.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }
-                .width(540f).growY().pad(6f).get()
-            } }
+            list.table { norm ->
+              norm.top().defaults().width(540f).fillY().pad(6f)
+              normCols = Array(n) {
+                norm.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
+              }
+            }
             getModList(
               errHandler = { e ->
                 Log.err(e)
@@ -1162,7 +1178,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           bot.defaults().width(242f).height(62f).pad(6f)
           bot.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f)
           { hide() }
-          bot.button(Core.bundle["dialog.mods.refresh"], Icon.rotate, Styles.grayt, 46f) {
+          bot.button(Core.bundle["dialog.mods.refresh"], Icon.refresh, Styles.grayt, 46f) {
             modList = null
             browserTabs.clear()
 

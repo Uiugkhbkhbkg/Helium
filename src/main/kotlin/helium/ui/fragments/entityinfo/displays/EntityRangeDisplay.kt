@@ -6,7 +6,6 @@ import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Lines
 import arc.math.Interp
 import arc.math.Mathf
-import arc.math.geom.Geometry
 import arc.math.geom.Rect
 import arc.scene.ui.layout.Table
 import arc.struct.Bits
@@ -21,7 +20,10 @@ import helium.ui.fragments.entityinfo.ConfigurableDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
 import mindustry.game.Team
-import mindustry.gen.*
+import mindustry.gen.Building
+import mindustry.gen.Icon
+import mindustry.gen.Posc
+import mindustry.gen.Unitc
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.logic.Ranged
@@ -176,23 +178,16 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
   }
 
   override fun EntityRangeModel.draw(alpha: Float) {
-    val a = (alpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
+    val a = (alpha/He.config.entityInfoAlpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
     val radius = range*a
     val layer = Layer.light - 3 + layerOffset
-    val size = entity.let {
-      when(it) {
-        is Hitboxc -> it.hitSize()*1.44f
-        is Buildingc -> it.hitSize()*1.44f
-        else -> 16f
-      }
-    }
 
     if (!teamBits.get(layerID)){
       teamBits.set(layerID)
       Draw.drawRange(layer, 0.0045f, {
         entityRangeRenderer.capture()
       }) {
-        entityRangeRenderer.alpha = this.alpha
+        entityRangeRenderer.alpha = this.alpha*He.config.entityInfoAlpha
         entityRangeRenderer.render()
       }
     }
@@ -211,25 +206,6 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
       inner*radius, outer*radius,
       Tmp.c1.set(Color.white).a(0f), Color.white, 1
     )
-
-    val strokeOff = radius/16f
-    val ang = Time.time*phaseScl + phaseOffset
-    for (i in 0 until 4) {
-      val dir = Geometry.d4(i)
-      val offX = dir.x*size*inner
-      val offY = dir.y*size*inner
-      val toX = dir.x*(radius - strokeOff - 8f)*outer
-      val toY = dir.y*(radius - strokeOff - 8f)*outer
-
-      val off = Tmp.v1.set(offX, offY).rotate(ang)
-      val to = Tmp.v2.set(toX, toY).rotate(ang)
-
-      Lines.stroke(strokeOff*(1 - inner)*a, Color.white)
-      Lines.line(
-        entity.x + off.x, entity.y + off.y,
-        entity.x + to.x, entity.y + to.y
-      )
-    }
 
     Draw.z(layer + 0.003f)
     Lines.stroke(1f, Color.black)

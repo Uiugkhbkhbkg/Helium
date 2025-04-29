@@ -28,6 +28,9 @@ abstract class EntityInfoDisplay<M: Model<*>>(
   open val screenRender: Boolean get() = true
   open val worldRender: Boolean get() = false
 
+  open val maxSizeMultiple: Int get() = 6
+  open val minSizeMultiple: Int get() = 2
+
   abstract fun valid(entity: Posc): Boolean
   abstract fun enabled(): Boolean
 

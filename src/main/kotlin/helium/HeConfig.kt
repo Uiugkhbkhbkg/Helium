@@ -49,6 +49,7 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
 
   @ConfigItem var enableBetterPlacement = true
+  @ConfigItem var switchFastPageHotKey = KeyCode.tab
 
   @ConfigItem var enableBetterModsDialog = true
 

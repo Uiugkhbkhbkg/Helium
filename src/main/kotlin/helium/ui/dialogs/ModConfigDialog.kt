@@ -170,7 +170,7 @@ class ModConfigDialog : BaseDialog("") {
                 Actions.run { this.rebuildSettings() },
                 Actions.alpha(1f, 0.3f)
               )
-            }.update { b: TextButton -> b.isChecked = key == currCat }
+            }.update { b: TextButton -> b.isChecked = key == currCat }.margin(12f)
           }
         }
       }.growX().fillY()
@@ -185,7 +185,7 @@ class ModConfigDialog : BaseDialog("") {
         hover!!.visible = false
         pane.addChild(hover)
       }.growX().fillY().top().scrollX(false).get()
-    }.grow().pad(4f).padLeft(12f).padRight(12f)
+    }.grow().maxWidth(1200f).pad(4f).margin(12f)
     cont.row()
     relaunchTip = cont.table(HeAssets.grayUIAlpha) { t ->
       t.add(Core.bundle["infos.requireRelaunch"]).color(Color.red)

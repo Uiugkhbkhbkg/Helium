@@ -3,6 +3,7 @@ package helium.ui.fragments.entityinfo.displays
 import arc.Core
 import arc.math.Interp
 import arc.math.Mathf
+import arc.math.geom.Rect
 import arc.scene.Element
 import arc.scene.ui.layout.Table
 import arc.struct.Bits
@@ -27,6 +28,7 @@ class DetailsModel: InputCheckerModel<Displayable> {
 
   var fadeOut = 0f
   var hovering = false
+  var clipped = false
 
   override fun setup(ent: Displayable) {
     if (ent is Teamc) teamc = ent
@@ -47,6 +49,9 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
   override val DetailsModel.prefHeight: Float
     get() = element.prefHeight
 
+  override val minSizeMultiple: Int get() = -1
+  override val maxSizeMultiple: Int get() = -1
+
   override fun DetailsModel.buildListener(): Element {
     val tab = Table(HeAssets.padGrayUIAlpha).also {
       it.isTransform = true
@@ -55,6 +60,8 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     }
     entity.display(tab)
     tab.marginBottom(tab.background.bottomHeight)
+
+    tab.visible { !clipped }
     return tab
   }
 
@@ -65,6 +72,21 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     table.image(Icon.menu).size(64f).scaling(Scaling.fit)
     table.row()
     table.add(Core.bundle["infos.entityDetails"], Styles.outlineLabel)
+  }
+
+  override fun DetailsModel.checkScreenClip(
+    screenViewport: Rect,
+    origX: Float,
+    origY: Float,
+    drawWidth: Float,
+    drawHeight: Float
+  ): Boolean {
+    val res = screenViewport.overlaps(
+      origX, origY,
+      drawWidth, drawHeight
+    )
+    clipped = res
+    return res
   }
 
   override fun DetailsModel?.checkHovering(isHovered: Boolean): Boolean {

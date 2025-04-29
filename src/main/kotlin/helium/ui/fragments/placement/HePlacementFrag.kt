@@ -416,7 +416,6 @@ class HePlacementFrag {
     }.grow()
   }
 
-
   private fun buildTopInfo(table: Table) {
     table.update {
       val topTable = table
@@ -676,7 +675,7 @@ class HePlacementFrag {
 
     table.row()
 
-    table.button(Icon.flipX, Styles.clearNonei, 28f){
+    table.button(Icon.refresh, Styles.clearNonei, 28f){
       if (invAnimateActivating) return@button
 
       invPage = (invPage + 1)%3
