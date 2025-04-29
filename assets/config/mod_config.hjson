@@ -1,10 +1,5 @@
 {
-  "configVersion": 2,
-
-  //=====Debug/调试设置=====//
-
-  //启用加载信息
-  "loadInfo": true,
+  "configVersion": 3,
 
   //=====Basic/基础设置=====//
 
@@ -33,13 +28,25 @@
   "showHealRange": true,
   //显示超速投影作用范围
   "showOverdriveRange": true,
-  //实体信息控制热键
-  "entityInfoHotKey": "altLeft",
 
   //启用更好的放置面板
   "enableBetterPlacement": true,
-  "switchFastPageHotKey": "tab",
 
   //启用更好的mod设置页面
   "enableBetterModsDialog": true,
+
+  //=====KeyBinds/键位绑定=====//
+
+  //实体信息控制热键
+  "entityInfoHotKey": "altLeft",
+
+  //快速物品栏翻页
+  "switchFastPageHotKey": "tab",
+  //展开/收起方块选择面板
+  "placementFoldHotKey": "q",
+
+  //=====Debug/调试设置=====//
+
+  //启用加载信息
+  "loadInfo": true,
 }
