@@ -758,6 +758,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
       try {
         Vars.mods.importMod(file)
         modTabs.clear()
+        shouldRelaunch()
         rebuildMods()
       } catch (e: java.lang.Exception) {
         Log.err(e)
