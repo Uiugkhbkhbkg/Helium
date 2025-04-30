@@ -8,14 +8,13 @@ import arc.graphics.g2d.Draw
 import arc.graphics.g2d.TextureRegion
 import arc.math.Interp
 import arc.math.Mathf
+import arc.math.geom.Rect
 import arc.scene.Element
+import arc.scene.Group
 import arc.scene.actions.Actions
 import arc.scene.style.Drawable
 import arc.scene.style.TextureRegionDrawable
-import arc.scene.ui.Button
-import arc.scene.ui.Image
-import arc.scene.ui.Label
-import arc.scene.ui.Tooltip
+import arc.scene.ui.*
 import arc.scene.ui.layout.Cell
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
@@ -79,6 +78,30 @@ private const val BLACKLIST            = 0b100000000000
 
 private var exec: ExecutorService = Threads.unboundedExecutor("HTTP", 1)
 private var modList: OrderedMap<Name, ModListing>? = null
+
+private class CullTable: Table{
+  constructor(background: Drawable?): super(background)
+  constructor(build: Cons<Table>): super(build)
+  constructor(background: Drawable?, build: Cons<Table>): super(background, build)
+
+  override fun drawChildren() {
+    cullingArea?.also { widgetAreaBounds ->
+      children.forEach { widget ->
+        if (widget is Group) {
+          val set = widget.cullingArea?: Rect()
+          set.set(widgetAreaBounds)
+          set.x -= widget.x
+          set.y -= widget.y
+          widget.setCullingArea(set)
+        }
+      }
+    }
+    super.drawChildren()
+  }
+}
+
+private fun Table.cullTable(background: Drawable? = null, build: Cons<Table>? = null) =
+  add(CullTable(background).also { t -> build?.also { it.get(t) } })
 
 private fun Int.isEnabled() = this and ENABLED != 0
 private fun Int.isClientOnly() = this and CLIENT_ONLY != 0
@@ -370,63 +393,44 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
             buildModAttrIcons(status, stat)
 
-            val failed = Cons<Throwable> {
+            checkModUpdate(mod, {
               checkUpdate.drawable = Icon.warningSmall
               checkUpdate.setColor(Pal.redDust)
               updateTip!!.setText(Core.bundle["dialog.mods.checkUpdateFailed"])
-            }
+            }){ res ->
+              if (res.latestMod != null && res.updateValid) stat = stat or UP_TO_DATE
 
-            if (stat.isValid()) {
-              checkModUpdate(mod, failed){ res ->
-                if (res.updateValid) stat = stat or UP_TO_DATE
+              if (stat.isUpToDate()) {
+                checkUpdate.drawable = Icon.upSmall
+                checkUpdate.setColor(HeAssets.lightBlue)
 
-                if (stat.isUpToDate()) {
-                  checkUpdate.drawable = Icon.upSmall
-                  checkUpdate.setColor(HeAssets.lightBlue)
+                updateEntry = res
+                updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
+              }
 
-                  updateEntry = res
-                  updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
-                }
-                else {
+              if (stat.isValid()) {
+                if (!stat.isUpToDate()) {
                   checkUpdate.drawable = Icon.okSmall
                   checkUpdate.setColor(Pal.heal)
 
                   updateTip!!.setText(Core.bundle["dialog.mods.isLatest"])
                 }
               }
-            }
-            else {
-              checkModUpdate(mod, failed){ res ->
-                if (res.latestMod == null) {
-                  checkUpdate.drawable = Icon.infoCircleSmall
-                  checkUpdate.setColor(Pal.orangeSpark)
-                  updateTip!!.setText(Core.bundle.format("dialog.mods.checkFailed"))
-                }
-                else if (res.updateValid) stat = stat or UP_TO_DATE
+              else {
+                checkUpdate.visible = false
 
-                if (stat.isUpToDate()) {
-                  checkUpdate.drawable = Icon.upSmall
-                  checkUpdate.setColor(HeAssets.lightBlue)
+                if (stat.isLibMissing()) status.image(Icon.layersSmall).scaling(Scaling.fit).color(Color.crimson)
+                  .addTip(Core.bundle["dialog.mods.libMissing"])
+                else if (stat.isLibIncomplete()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+                  .addTip(Core.bundle["dialog.mods.libIncomplete"])
+                else if (stat.isLibCircleDepending()) status.image(Icon.refresh).scaling(Scaling.fit).color(Color.crimson)
+                  .addTip(Core.bundle["dialog.mods.libCircleDepending"])
 
-                  updateEntry = res
-                  updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
-                }
-                else {
-                  checkUpdate.visible = false
-                }
+                if (stat.isError()) status.image(Icon.cancelSmall).scaling(Scaling.fit).color(Color.crimson)
+                  .addTip(Core.bundle["dialog.mods.error"])
+                if (stat.isBlackListed()) status.image(Icon.infoCircle).scaling(Scaling.fit).color(Color.crimson)
+                  .addTip(Core.bundle["dialog.mods.blackListed"])
               }
-
-              if (stat.isLibMissing()) status.image(Icon.layersSmall).scaling(Scaling.fit).color(Color.crimson)
-                .addTip(Core.bundle["dialog.mods.libMissing"])
-              else if (stat.isLibIncomplete()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
-                .addTip(Core.bundle["dialog.mods.libIncomplete"])
-              else if (stat.isLibCircleDepending()) status.image(Icon.refresh).scaling(Scaling.fit).color(Color.crimson)
-                .addTip(Core.bundle["dialog.mods.libCircleDepending"])
-
-              if (stat.isError()) status.image(Icon.cancelSmall).scaling(Scaling.fit).color(Color.crimson)
-                .addTip(Core.bundle["dialog.mods.error"])
-              if (stat.isBlackListed()) status.image(Icon.infoCircle).scaling(Scaling.fit).color(Color.crimson)
-                .addTip(Core.bundle["dialog.mods.blackListed"])
             }
           }.fill().pad(4f)
 
@@ -967,26 +971,30 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             info.row()
             info.table { stars ->
               stars.bottom().right()
-              stars.add(object : Element(){
-                override fun draw() {
-                  validate()
-                  Draw.color(Color.darkGray)
-                  Icon.starSmall.draw(
-                    x - width*0.2f, y - height*0.2f,
-                    0f, 0f, width, height,
-                    1.4f, 1.4f, 0f
-                  )
-                  Draw.color(Color.white)
-                  Icon.starSmall.draw(x, y, width, height)
-                }
-              }).size(60f).pad(-16f)
-              stars.add(modInfo.stars.toString(), Styles.outlineLabel, 0.85f)
-                .bottom().padBottom(4f).padLeft(-2f)
+              buildStars(stars, modInfo)
             }
           }
         ).pad(12f).padLeft(4f).growX().fillY().minWidth(420f)
       }.margin(6f).growX().fillY()
     }
+  }
+
+  private fun buildStars(stars: Table, modInfo: ModListing) {
+    stars.add(object : Element() {
+      override fun draw() {
+        validate()
+        Draw.color(Color.darkGray)
+        Icon.starSmall.draw(
+          x - width*0.2f, y - height*0.2f,
+          0f, 0f, width, height,
+          1.4f, 1.4f, 0f
+        )
+        Draw.color(Color.white)
+        Icon.starSmall.draw(x, y, width, height)
+      }
+    }).size(60f).pad(-16f)
+    stars.add(modInfo.stars.toString(), Styles.outlineLabel, 0.85f)
+      .bottom().padBottom(4f).padLeft(-2f)
   }
 
   private fun checkModUpdate(
@@ -1095,7 +1103,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         main.row()
         main.line(Pal.accent, true, 4f).padTop(4f)
         main.row()
-        main.pane { list ->
+        main.add(ScrollPane(CullTable{ list ->
           list.top().defaults().fill()
 
           val n = max((Core.graphics.width/Scl.scl(540f)).toInt(), 1)
@@ -1111,7 +1119,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             list.row()
             list.line(Pal.accent, true, 4f).pad(6f).padLeft(-4f).padRight(-4f)
             list.row()
-            list.table { fav ->
+            list.cullTable { fav ->
               fav.add(HeCollapser(collX = false, collY = true, background = HeAssets.grayUIAlpha){ col ->
                 col.table { t -> t.add(Core.bundle["dialog.mods.noFavorites"]) }.fill().margin(24f)
               }.setCollapsed { favoritesMods.any() }).fill().colspan(n)
@@ -1120,7 +1128,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
               fav.defaults().width(540f).fillY().pad(6f)
               favCols = Array(n) {
-                fav.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
+                fav.cullTable(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
               }
             }
             list.row()
@@ -1128,10 +1136,10 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             list.row()
             list.line(Pal.accent, true, 4f).pad(6f).padLeft(-4f).padRight(-4f)
             list.row()
-            list.table { norm ->
+            list.cullTable { norm ->
               norm.top().defaults().width(540f).fillY().pad(6f)
               normCols = Array(n) {
-                norm.table(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
+                norm.cullTable(HeAssets.grayUIAlpha){ it.top().defaults().growX().fillY() }.get()
               }
             }
             getModList(
@@ -1171,7 +1179,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           }
 
           rebuildList()
-        }.growY().fillX().padLeft(20f).padRight(20f)
+        })).growY().fillX().padLeft(20f).padRight(20f)
         main.row()
         main.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
         main.row()
@@ -1216,31 +1224,17 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
       browserTabs[mod] = res
 
       val iconLink = "https://raw.githubusercontent.com/Anuken/MindustryMods/master/icons/" + mod.repo.replace("/", "_")
-      val image = Downloader.downloadImg(iconLink, Core.atlas.find("nomap"))
+      val image = Downloader.downloadLazyDrawable(iconLink, Core.atlas.find("nomap"))
       val loaded = Vars.mods.getMod(mod.internalName)
 
       res.button(
         { top ->
           top.table(Tex.buttonSelect) { icon ->
             icon.stack(
-              Image(TextureRegionDrawable(image)).setScaling(Scaling.fit),
+              Image(image).setScaling(Scaling.fit),
               Table { stars ->
                 stars.bottom().left()
-                stars.add(object : Element(){
-                  override fun draw() {
-                    validate()
-                    Draw.color(Color.darkGray)
-                    Icon.starSmall.draw(
-                      x - width*0.2f, y - height*0.2f,
-                      0f, 0f, width, height,
-                      1.4f, 1.4f, 0f
-                    )
-                    Draw.color(Color.white)
-                    Icon.starSmall.draw(x, y, width, height)
-                  }
-                }).size(60f).pad(-16f)
-                stars.add(mod.stars.toString(), Styles.outlineLabel, 0.85f)
-                  .bottom().padBottom(4f).padLeft(-2f)
+                buildStars(stars, mod)
               }
             ).size(80f)
           }.pad(10f).margin(4f).size(88f)

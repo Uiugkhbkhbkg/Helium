@@ -7,6 +7,8 @@ import arc.func.ConsT
 import arc.graphics.Pixmap
 import arc.graphics.Texture
 import arc.graphics.g2d.TextureRegion
+import arc.scene.style.Drawable
+import arc.scene.style.TextureRegionDrawable
 import arc.struct.OrderedMap
 import arc.util.Http
 import arc.util.Log
@@ -113,6 +115,51 @@ object Downloader {
   ): TextureRegion {
     val result = TextureRegion(errDef)
 
+    doDownloadImg(url, sync, progressBack, result, completed, errHandler)
+
+    return result
+  }
+
+  fun downloadLazyImg(
+    url: String,
+    errDef: TextureRegion,
+    sync: Boolean = false,
+    progressBack: Cons<Float>? = null,
+    errHandler: Cons<Throwable>? = null,
+    completed: Cons<TextureRegion>? = null,
+  ): LazyRegionProv {
+    val result = TextureRegion(errDef)
+
+    return LazyRegionProv(result) {
+      doDownloadImg(url, sync, progressBack, result, completed, errHandler)
+    }
+  }
+
+  fun downloadLazyDrawable(
+    url: String,
+    errDef: TextureRegion,
+    sync: Boolean = false,
+    progressBack: Cons<Float>? = null,
+    errHandler: Cons<Throwable>? = null,
+    completed: Cons<TextureRegion>? = null,
+  ): Drawable {
+    val prov = downloadLazyImg(url, errDef, sync, progressBack, errHandler, completed)
+    return object: TextureRegionDrawable(prov.region){
+      override fun draw(x: Float, y: Float, width: Float, height: Float) {
+        prov.init()
+        super.draw(x, y, width, height)
+      }
+    }
+  }
+
+  private fun doDownloadImg(
+    url: String,
+    sync: Boolean,
+    progressBack: Cons<Float>?,
+    result: TextureRegion,
+    completed: Cons<TextureRegion>?,
+    errHandler: Cons<Throwable>?,
+  ) {
     retryDown(url, sync, { res ->
       val input = res.resultAsStream
       val total = res.contentLength
@@ -143,7 +190,18 @@ object Downloader {
         }
       }
     }, 5, { th -> errHandler?.get(th) })
+  }
+}
 
-    return result
+data class LazyRegionProv(
+  val region: TextureRegion,
+  val downloader: Runnable
+){
+  private var done = false
+
+  fun init(){
+    if (done) return
+    downloader.run()
+    done = true
   }
 }
