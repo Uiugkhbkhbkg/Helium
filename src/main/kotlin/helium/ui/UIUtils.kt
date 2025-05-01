@@ -19,6 +19,9 @@ import mindustry.graphics.Pal
 import mindustry.ui.Styles
 
 object UIUtils {
+  val cancelBut = ButtonEntry(Core.bundle["cancel"], Icon.cancel, clicked = { it.hide() })
+  val closeBut = ButtonEntry(Core.bundle["misc.close"], Icon.cancel, clicked = { it.hide() })
+
   fun showException(e: Throwable, message: String? = null) = showPane(
     Core.bundle["infos.exception"],
     ButtonEntry(Core.bundle["confirm"], Icon.ok) { it.hide() },
@@ -105,13 +108,13 @@ object UIUtils {
       title?.also {
         info.add(it).color(titleColor).pad(8f)
         info.row()
+        info.line(Pal.accent, true, 3f).padTop(4f).padLeft(-6f).padRight(-6f)
+        info.row()
       }
-      info.line(Pal.accent, true, 3f).padTop(4f).padLeft(-6f).padRight(-6f)
-      info.row()
-      info.table(build).grow().minSize(420f, 120f).pad(12f)
+      info.pane(build).grow().minSize(360f, 100f).pad(12f)
       info.row()
       info.table { but ->
-        but.defaults().growX().height(46f).minWidth(72f).pad(4f)
+        but.defaults().growX().height(46f).minWidth(82f).pad(4f)
         buttons.forEach { entry ->
           but.button("", Styles.none, Styles.flatt, 32f) {
             entry.clicked(dialog)
@@ -159,6 +162,3 @@ data class ButtonEntry(
     clicked,
   )
 }
-
-val cancelBut = ButtonEntry(Core.bundle["cancel"], Icon.cancel, clicked = { it.hide() })
-val closeBut = ButtonEntry(Core.bundle["misc.close"], Icon.cancel, clicked = { it.hide() })

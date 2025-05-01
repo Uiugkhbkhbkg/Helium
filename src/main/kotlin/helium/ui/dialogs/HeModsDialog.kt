@@ -30,8 +30,8 @@ import helium.set
 import helium.ui.ButtonEntry
 import helium.ui.HeAssets
 import helium.ui.UIUtils
+import helium.ui.UIUtils.closeBut
 import helium.ui.UIUtils.line
-import helium.ui.closeBut
 import helium.ui.elements.HeCollapser
 import helium.util.Downloader
 import helium.util.toStoreSize
@@ -202,8 +202,8 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               pane.row()
               pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
               pane.row()
-              pane.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
-              { generateModsList() }
+              pane.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
+              { generateModsPack() }
               pane.row()
               pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
               { openFolder() }
@@ -314,8 +314,8 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             { hide() }
             bot.button(Core.bundle["dialog.mods.refresh"], Icon.refresh, Styles.grayt, 46f)
             { refresh() }
-            bot.button(Core.bundle["dialog.mods.generateList"], Icon.list, Styles.grayt, 46f)
-            { generateModsList() }
+            bot.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
+            { generateModsPack() }
             bot.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
             { openFolder() }
             bot.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
@@ -630,7 +630,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     }
   }
 
-  private fun generateModsList() {
+  private fun generateModsPack() {
     //TODO
     UIUtils.showTip(
       Core.bundle["infos.wip"],
@@ -1195,21 +1195,71 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           }
           if (Core.graphics.isPortrait) bot.row()
           bot.button(Core.bundle["dialog.mods.importFav"], Icon.download, Styles.grayt, 46f) {
-            //TODO
-            UIUtils.showTip(
-              Core.bundle["infos.wip"],
-              Core.bundle["infos.notImplementYet"]
-            )
+            importFavorites()
           }
           bot.button(Core.bundle["dialog.mods.exportFav"], Icon.export, Styles.grayt, 46f) {
-            //TODO
-            UIUtils.showTip(
-              Core.bundle["infos.wip"],
-              Core.bundle["infos.notImplementYet"]
-            )
+            exportFavorites()
           }
         }.growX().fillY()
       }.grow()
+    }
+
+    private fun importFavorites() {
+      UIUtils.showInput(
+        Core.bundle["dialog.mods.importFav"],
+        Core.bundle["dialog.mods.inputFavText"],
+        true
+      ){ d, t ->
+        val repos = t.split(";").map { it.trim() }.toSet()
+        getModList { list ->
+          list.values()
+            .filter { repos.contains(it.repo) }
+            .forEach { m ->
+              val key = "mod.favorites.${m.internalName}"
+              He.global.put(key, true)
+            }
+
+          rebuildList()
+          d.hide()
+        }
+      }
+    }
+
+    private fun exportFavorites() {
+      if (favoritesMods.isEmpty){
+        UIUtils.showTip(
+          null,
+          Core.bundle["dialog.mods.noFavorites"]
+        )
+        return
+      }
+
+      val mods = StringBuilder()
+      favoritesMods.forEach {  m ->
+        mods.append(m.repo).append(";\n")
+      }
+
+      UIUtils.showPane(
+        Core.bundle["dialog.mods.exportFav"],
+        closeBut,
+        ButtonEntry(Core.bundle["misc.copy"], Icon.copy) {
+          Vars.ui.showInfoFade(Core.bundle["infos.copied"])
+          Core.app.clipboardText = mods.toString()
+        },
+        ButtonEntry(Core.bundle["misc.save"], Icon.file) {
+          Vars.platform.showFileChooser(false, "zip") { f ->
+            f.writer(false).write(mods.toString())
+          }
+        }
+      ){ t ->
+        t.add(Core.bundle["dialog.mods.favoritesText"]).growX().pad(6f).left()
+          .labelAlign(Align.left).color(Color.lightGray)
+        t.row()
+        t.table(HeAssets.darkGrayUIAlpha) { l ->
+          l.left().top().add(mods, Label.LabelStyle(MarkdownStyles.defaultMD.codeFont, Color.white))
+            .pad(6f).wrap()
+        }.margin(12f).minWidth(420f).growX()
+      }
     }
 
     private fun buildModTab(mod: ModListing): Table {
