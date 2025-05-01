@@ -61,6 +61,13 @@ Currently in early development with primary features including:
   ![Placement Panel (Collapsed)](preview_imgs/en/placement-fold.png)  
   ![Placement Panel (Expanded)](preview_imgs/en/placement-unfold.png)
 
+- **The better Mod Manager and Mod Browser**
+
+  Reworked the Mods Manager and Mods Browser, now they looks more aesthetically pleasing and functional, you can normally open [Mods] page to open new Mod Manager when it enabled, now the mods manager looks like:
+
+  ![mod管理器](preview_imgs/en/modManager.png)
+  ![mod管理器](preview_imgs/en/modBrowser.png)
+
 ### Mod Configuration
 
 Added **_\[Helium Config]_** entry in game settings, providing modular control over all UI modifications:

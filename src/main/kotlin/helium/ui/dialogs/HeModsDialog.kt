@@ -185,17 +185,17 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               pane.row()
               pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
               pane.row()
-              pane.button(Core.bundle["mods.browser"], Icon.planet, Styles.flatBordert, 46f){
+              pane.button(Core.bundle["mods.browser"], Icon.planet, Styles.grayt, 46f){
                 browser.show()
-              }.margin(8f)
+              }.margin(4f)
               pane.row()
-              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.flatBordert, 46f){
+              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.grayt, 46f){
                 importFile()
-              }.margin(8f)
+              }.margin(4f)
               pane.row()
-              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.flatBordert, 46f){
+              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.grayt, 46f){
                 importGithub()
-              }.margin(8f)
+              }.margin(4f)
               pane.row()
 
               pane.add(Core.bundle["dialog.mods.otherHandle"]).color(Color.gray)
@@ -203,13 +203,13 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
               pane.row()
               pane.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
-              { generateModsPack() }
+              { generateModsPack() }.margin(4f)
               pane.row()
               pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
-              { openFolder() }
+              { openFolder() }.margin(4f)
               pane.row()
               pane.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
-              { Core.app.openURI(modGuideURL) }
+              { Core.app.openURI(modGuideURL) }.margin(4f)
             }.growX().fillY().maxHeight(400f)
           }.setDuration(0.3f, Interp.pow3Out).also { coll = it }).growX().fillY()
           list.row()
@@ -251,7 +251,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         main.table { search ->
           search.image(Icon.zoom).size(64f).scaling(Scaling.fit)
           search.field(""){
-            searchStr = it
+            searchStr = it.lowercase()
             rebuildMods()
           }.growX()
         }.growX().fillY().padLeft(16f).padRight(16f)
@@ -342,7 +342,11 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
     disabled.clearChildren()
 
     Vars.mods.list()
-      .filter { searchStr.isBlank() || it.name.contains(searchStr) || it.meta.displayName.contains(searchStr) }
+      .filter {
+        searchStr.isBlank()
+        || it.name.lowercase().contains(searchStr)
+        || it.meta.displayName.lowercase().contains(searchStr)
+      }
       .forEach { mod ->
         val stat = checkModStat(mod)
 
@@ -1076,7 +1080,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         main.table { top ->
           top.image(Icon.zoom).size(64f).scaling(Scaling.fit)
           top.field(""){
-            search = it
+            search = it.lowercase()
             rebuildList()
           }.growX()
           top.button(Icon.list, Styles.emptyi, 32f) {
@@ -1103,7 +1107,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         main.row()
         main.line(Pal.accent, true, 4f).padTop(4f)
         main.row()
-        main.add(ScrollPane(CullTable{ list ->
+        main.add(ScrollPane( CullTable{ list ->
           list.top().defaults().fill()
 
           val n = max((Core.graphics.width/Scl.scl(540f)).toInt(), 1)
@@ -1152,7 +1156,11 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               var normI = 0
 
               ls.values()
-                .filter { search.isBlank() || it.name.contains(search) || it.internalName.contains(search) }
+                .filter {
+                  search.isBlank()
+                  || it.name.lowercase().contains(search)
+                  || it.internalName.lowercase().contains(search)
+                }
                 .filter { !hideInvalid || it.checkStatus().isValid() }
                 .let { l ->
                   if (reverse) {
@@ -1179,7 +1187,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
           }
 
           rebuildList()
-        })).growY().fillX().padLeft(20f).padRight(20f)
+        }, Styles.smallPane)).growY().fillX().padLeft(20f).padRight(20f)
         main.row()
         main.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
         main.row()
