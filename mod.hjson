@@ -4,7 +4,7 @@
   author: "EBwilson",
   main: "helium.Helium",
   description: "A mod provide optimized ui",
-  version: "beta-0.5",
+  version: "beta-0.5b",
   minGameVersion: 147,
   hidden: true
 }

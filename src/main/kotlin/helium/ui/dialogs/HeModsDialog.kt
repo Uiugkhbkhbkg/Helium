@@ -168,75 +168,83 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
 
     cont.table { main ->
       if (Core.graphics.isPortrait){
-        main.table(HeAssets.grayUIAlpha) { list ->
-          list.top().margin(6f)
+        main.stack(
+          Table(HeAssets.grayUIAlpha) { list ->
+            list.top().margin(6f)
 
-          var coll: HeCollapser? = null
-          list.button(Core.bundle["dialog.mods.menu"], Icon.menuSmall, Styles.flatt){
-            coll?.toggle()
-          }.growX().height(38f).margin(8f).update { b ->
-            b.find<Image> { it is Image }.setDrawable(if (coll?.collapse?:true) Icon.menuSmall else Icon.upOpen)
+            var coll: HeCollapser? = null
+            list.button(Core.bundle["dialog.mods.menu"], Icon.menuSmall, Styles.flatt){
+              coll?.toggle()
+            }.growX().height(38f).margin(8f).update { b ->
+              b.find<Image> { it is Image }.setDrawable(if (coll?.collapse?:true) Icon.menuSmall else Icon.upOpen)
+            }
+            list.row()
+            list.add(HeCollapser(collX = false, collY = true, collapsed = true){ coll ->
+              coll.pane(Styles.smallPane) { pane ->
+                pane.defaults().growX().fillY().pad(4f)
+                pane.add(Core.bundle["dialog.mods.importMod"]).color(Color.gray)
+                pane.row()
+                pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
+                pane.row()
+                pane.button(Core.bundle["mods.browser"], Icon.planet, Styles.grayt, 46f){
+                  browser.show()
+                }.margin(4f)
+                pane.row()
+                pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.grayt, 46f){
+                  importFile()
+                }.margin(4f)
+                pane.row()
+                pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.grayt, 46f){
+                  importGithub()
+                }.margin(4f)
+                pane.row()
+
+                pane.add(Core.bundle["dialog.mods.otherHandle"]).color(Color.gray)
+                pane.row()
+                pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
+                pane.row()
+                pane.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
+                { generateModsPack() }.margin(4f)
+                pane.row()
+                pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
+                { openFolder() }.margin(4f)
+                pane.row()
+                pane.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
+                { Core.app.openURI(modGuideURL) }.margin(4f)
+              }.growX().fillY().maxHeight(400f)
+            }.setDuration(0.3f, Interp.pow3Out).also { coll = it }).growX().fillY()
+            list.row()
+            list.line(Pal.darkerGray, true, 4f)
+            list.row()
+            list.pane(Styles.smallPane) { pane ->
+              pane.table { en ->
+                en.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
+                en.row()
+                en.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+                en.row()
+                en.top().table { enabled ->
+                  this.enabled = enabled
+                }.growX().fillY().top()
+              }.margin(6f).growX().fillY()
+              pane.row()
+              pane.table { di ->
+                di.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
+                di.row()
+                di.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+                di.row()
+                di.top().table { disabled ->
+                  this.disabled = disabled
+                }.growX().fillY().top()
+              }.margin(6f).growX().fillY()
+            }.growX().fillY().scrollX(false).scrollY(true).get().setForceScroll(true, true)
+          },
+          Table{ tip ->
+            tip.bottom().table(HeAssets.grayUIAlpha){ t ->
+              tipTable = t
+              t.visible = false
+            }.fillY().growX().margin(8f)
           }
-          list.row()
-          list.add(HeCollapser(collX = false, collY = true, collapsed = true){ coll ->
-            coll.pane(Styles.smallPane) { pane ->
-              pane.defaults().growX().fillY().pad(4f)
-              pane.add(Core.bundle["dialog.mods.importMod"]).color(Color.gray)
-              pane.row()
-              pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
-              pane.row()
-              pane.button(Core.bundle["mods.browser"], Icon.planet, Styles.grayt, 46f){
-                browser.show()
-              }.margin(4f)
-              pane.row()
-              pane.button(Core.bundle["mod.import.file"], Icon.file, Styles.grayt, 46f){
-                importFile()
-              }.margin(4f)
-              pane.row()
-              pane.button(Core.bundle["mod.import.github"], Icon.download, Styles.grayt, 46f){
-                importGithub()
-              }.margin(4f)
-              pane.row()
-
-              pane.add(Core.bundle["dialog.mods.otherHandle"]).color(Color.gray)
-              pane.row()
-              pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
-              pane.row()
-              pane.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
-              { generateModsPack() }.margin(4f)
-              pane.row()
-              pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
-              { openFolder() }.margin(4f)
-              pane.row()
-              pane.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
-              { Core.app.openURI(modGuideURL) }.margin(4f)
-            }.growX().fillY().maxHeight(400f)
-          }.setDuration(0.3f, Interp.pow3Out).also { coll = it }).growX().fillY()
-          list.row()
-          list.line(Pal.darkerGray, true, 4f)
-          list.row()
-          list.pane(Styles.smallPane) { pane ->
-            pane.table { en ->
-              en.add(Core.bundle["dialog.mods.enabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
-              en.row()
-              en.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
-              en.row()
-              en.top().table { enabled ->
-                this.enabled = enabled
-              }.growX().fillY().top()
-            }.margin(6f).growX().fillY()
-            pane.row()
-            pane.table { di ->
-              di.add(Core.bundle["dialog.mods.disabled"]).color(Pal.accent).left().growX().labelAlign(Align.left)
-              di.row()
-              di.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
-              di.row()
-              di.top().table { disabled ->
-                this.disabled = disabled
-              }.growX().fillY().top()
-            }.margin(6f).growX().fillY()
-          }.growX().fillY().scrollX(false).scrollY(true).get().setForceScroll(true, true)
-        }.grow()
+        ).grow()
         main.row()
         main.line(Pal.gray, true, 4f).pad(-8f).padTop(6f).padBottom(6f)
         main.row()
@@ -413,7 +421,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               }
 
               if (stat.isValid()) {
-                if (!stat.isUpToDate()) {
+                if (stat.isEnabled() && !stat.isUpToDate()) {
                   checkUpdate.drawable = Icon.okSmall
                   checkUpdate.setColor(Pal.heal)
 

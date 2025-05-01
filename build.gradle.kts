@@ -23,7 +23,7 @@ plugins {
 }
 
 group = "com.github.EB-wilson"
-version = "beta-0.5"
+version = "beta-0.5b"
 
 run { "java SyncBundles.java $version".execute() }
 
@@ -56,7 +56,6 @@ repositories {
   mavenLocal()
   mavenCentral()
   maven ("https://maven.xpdustry.com/mindustry")
-  //maven { url = uri("https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository") }
   maven { url = uri("https://www.jitpack.io") }
 }
 
