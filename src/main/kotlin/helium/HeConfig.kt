@@ -36,6 +36,7 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
   @ConfigItem var enableEntityInfoDisplay = true
   @ConfigItem var enableHealthBarDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var hideHealthText = false
   @ConfigItem var enableUnitStatusDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var enableRangeDisplay = true

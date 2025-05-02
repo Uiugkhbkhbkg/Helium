@@ -5,6 +5,7 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
+import arc.input.KeyCode
 import arc.math.Mathf
 import arc.math.geom.Geometry
 import arc.math.geom.Rect
@@ -43,6 +44,7 @@ import mindustry.graphics.Drawf
 import mindustry.graphics.Layer
 import mindustry.graphics.Pal
 import mindustry.input.Binding
+import mindustry.ui.Fonts
 import mindustry.ui.Styles
 import java.util.*
 import kotlin.math.abs
@@ -71,6 +73,18 @@ class EntityInfoFrag {
     )
 
     private val Bits.bits: LongArray by accessField("bits")
+
+    @Suppress("KotlinConstantConditions")
+    private val selectKey = Binding::class.java.let {
+      if (it.isEnum) {
+        val sele = it.enumConstants.find { e -> (e as Enum<*>).name == "select" }
+        return@let Binding::class.java.getDeclaredField("defaultValue").also{ f -> f.isAccessible = true }
+          .get(sele) as KeyCode
+      }
+      else {
+        Binding.select.defaultValue as KeyCode
+      }
+    }
   }
 
   var controlling = false
@@ -505,7 +519,7 @@ class EntityInfoFrag {
     val mouse = Core.input.mouseWorld()
     val hotkeyDown = controlling || Core.input.keyDown(config.entityInfoHotKey)
     if (hotkeyDown) {
-      if (!selecting && Core.input.keyDown(Binding.select)) {
+      if (!selecting && Core.input.keyDown(selectKey)) {
         selecting = true
         clearTimer = Time.globalTime
         selectStart.set(mouse)
@@ -558,7 +572,17 @@ class EntityInfoFrag {
       }
     }
 
+    all.forEach { it.player = null }
+
     Groups.all.forEach { entity ->
+      if (entity is Playerc) {
+        entity.unit()?.also {
+          val e = tempEntry
+          e.entity = it
+          all.get(e)?.player = entity
+        }
+      }
+
       if (entity !is Teamc) return@forEach
 
       letEntity(entity)
@@ -580,7 +604,7 @@ class EntityInfoFrag {
       }
     }
 
-    if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
+    if (selecting && !(hotkeyDown && Core.input.keyDown(selectKey))){
       if (currHov.isEmpty && Time.globalTime - clearTimer < 15f) hovering.clear()
       else {
         var anyAdded = currHov.size > hovering.size
@@ -743,7 +767,8 @@ class EntityInfoFrag {
         }
       }
 
-      val sizeOrig = Core.camera.project(0f, 0f).x
+      val orig = Core.camera.project(0f, 0f)
+      val sizeOrig = orig.x
       val sizeOff = Core.camera.project(e.size, 0f).x - sizeOrig
 
       e.display.forEach f@{ entry ->
@@ -785,14 +810,25 @@ class EntityInfoFrag {
               offsetRight += disW
             }
             TOP -> {
+              val off = e.player?.run {
+                if (this.unit() != null && this.name() != null && !this.unit().inFogTo(Vars.player.team())) {
+                  if (!isLocal)
+                    Core.camera.project(tmp.set(0f, lineHeight())).y - orig.y
+                  else if (Core.settings.getBool("playerchat") && (textFadeTime() > 0.0f && lastText() != null || typing()))
+                    Core.camera.project(tmp.set(0f, lineHeight()*2)).y - orig.y
+                  else 0f
+                }
+                else 0f
+              }?: 0f
+
               val w = model.realWidth(topWidth)
               val h = model.realHeight(topWidth)
               val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
               else min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
-              if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop, disW, disH))
-                model.draw(a, scl, ox - disW/2, oy + offsetTop, disW, disH)
+              if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop + off, disW, disH))
+                model.draw(a, scl, ox - disW/2, oy + offsetTop + off, disW, disH)
 
               offsetTop += disH
             }
@@ -828,15 +864,20 @@ class EntityInfoFrag {
     Draw.sort(false)
   }
 
+  private fun lineHeight() = Fonts.outline.capHeight*(0.25f/Scl.scl(1.0f)) + 3.0f
+
   private fun checkIsHovering(e: EntityEntry) =
     hovering.contains(e) || ((controlling || Core.input.keyDown(config.entityInfoHotKey)) && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {
   lateinit var entity: Teamc
+  var player: Playerc? = null
+
   var alpha = 0f
   var showing = false
   var isValid = false
+
 
   val display = Seq<MutablePair<EntityInfoDisplay<Model<*>>, Model<*>?>>()
 
@@ -852,12 +893,15 @@ class EntityEntry : Poolable {
 
   override fun reset() {
     size = -1f
+    player = null
     display.forEach { e ->
       e.second?.also {
         if (it is InputCheckerModel) it.element.remove()
         Pools.free(it)
       }
     }
+    showing = false
+    isValid = false
     display.clear()
   }
 

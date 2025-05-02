@@ -105,25 +105,6 @@ object He {
     HeShaders.load()
     HeStyles.load()
 
-    //Events.on(EventType.ClientLoadEvent::class.java) {
-    //  Dialog().apply {
-    //    SwapGroup<Element>().apply {
-    //      cont.table { list ->
-    //        list.defaults().pad(6f)
-    //        for (n in 0 until 9) {
-    //          if (n > 0 && n%3 == 0) list.row()
-    //          val b = n/10f + 0.1f
-    //          list.add(swappable(Image().also {
-    //            it.setColor(Color(b, b, b, 1f))
-    //          })).size(80f + n*4)
-    //        }
-    //      }.fill()
-    //    }
-//
-    //    show()
-    //  }
-    //}
-
     placement = HePlacementFrag()
     setupTools(placement)
     placement.build(Vars.ui.hudGroup)

@@ -168,6 +168,10 @@ class HePlacementFrag {
     parent.fill{ toggler ->
       topLevel = toggler
 
+      val old = Vars.ui.hudfrag.blockfrag.togglerRef
+      val ind = parent.children.indexOf(old)
+      toggler.zIndex = ind + 1
+
       toggler.update {
         val old = Vars.ui.hudfrag.blockfrag.togglerRef
         old.visible = !config.enableBetterPlacement
@@ -277,7 +281,7 @@ class HePlacementFrag {
                 //gray on hover
                 b.update {
                   (b.getChildren().first() as Group).getChildren().first()
-                    .setColor(if (listener.isOver()) Color.lightGray else Color.white)
+                    .setColor(if (listener.isOver) Color.lightGray else Color.white)
                 }
               }
 
@@ -358,7 +362,7 @@ class HePlacementFrag {
         var shareStance: UnitStance? = null
 
         for (unit in Vars.control.input.selectedUnits) {
-          if (unit.isCommandable()) {
+          if (unit.isCommandable) {
             val nextCommand = unit.command().command
 
             if (hadCommand) {
@@ -628,9 +632,7 @@ class HePlacementFrag {
     }
 
     if (index < 4) {
-      for (i in 0..<4 - index) {
-        blockTable.add().size(46f)
-      }
+      for (i in 0..<4 - index) blockTable.add().size(46f)
     }
     blockTable.act(0f)
     blockPane.setScrollYForce(scrollPositions.get(currentCategory, 0f))
@@ -675,6 +677,8 @@ class HePlacementFrag {
 
     val event = InputEvent()
     fun listen(b: ImageButton, key: KeyCode) {
+      if (Core.scene.hasKeyboard()) return
+
       if (Core.input.keyDown(key)) {
         for (listener in b.listeners) {
           if (listener is ClickListener) {
@@ -870,7 +874,7 @@ class HePlacementFrag {
       super.act(delta)
       if (block != null && selected && currBlock != block) currentSlot = null
 
-      if (Core.input.keyTap(numKey)) fireClick()
+      if (!Core.scene.hasKeyboard() && Core.input.keyTap(numKey)) fireClick()
     }
 
     override fun draw() {

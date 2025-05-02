@@ -181,6 +181,8 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
       )
     }
 
+    if (!hovering && He.config.hideHealthText) return
+
     //The texture of the text is decoupled from the UI, should be drawn in groups to optimize performance
     Draw.z(10f)
     val rate = drawHeight/style.font.capHeight
@@ -204,6 +206,8 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
   }
 
   private fun HealthModel.updateText(drawWidth: Float, scale: Float, alpha: Float){
+    if (!hovering && He.config.hideHealthText) return
+
     if (detailCache.font != style.font) detailCache = FontCache(style.font)
     if (shieldCache.font != style.font) shieldCache = FontCache(style.font)
 
