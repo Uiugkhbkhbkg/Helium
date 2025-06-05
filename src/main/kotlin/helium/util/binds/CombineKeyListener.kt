@@ -1,4 +1,4 @@
-package tmi.util
+package helium.util.binds
 
 import arc.Core
 import arc.input.KeyCode

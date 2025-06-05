@@ -19,7 +19,7 @@ import helium.ui.UIUtils.line
 import helium.ui.dialogs.ModConfigDialog.ConfigLayout
 import mindustry.graphics.Pal
 import mindustry.ui.Styles
-import tmi.util.CombinedKeys
+import helium.util.binds.CombinedKeys
 import kotlin.reflect.KMutableProperty0
 
 class ConfigSepLine(

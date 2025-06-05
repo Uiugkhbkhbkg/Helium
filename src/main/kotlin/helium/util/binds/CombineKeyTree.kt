@@ -1,4 +1,4 @@
-package tmi.util
+package helium.util.binds
 
 import arc.Input
 import arc.func.Cons
