@@ -19,6 +19,7 @@ import helium.ui.HeAssets
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
+import helium.util.runInst
 import mindustry.Vars
 import mindustry.core.UI
 import mindustry.gen.*
@@ -95,9 +96,9 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     table.add(Core.bundle["infos.healthDisplay"], Styles.outlineLabel)
   }
 
-  override fun HealthModel?.checkHovering(isHovered: Boolean): Boolean {
-    this?.hovering = isHovered
-    return isHovered
+  override fun HealthModel?.checkHolding(isHold: Boolean, mouseHovering: Boolean): Boolean {
+    this?.hovering = isHold
+    return isHold
   }
   override fun HealthModel.shouldDisplay() = entity !is Building || hovering
 
@@ -118,7 +119,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     val healthBarWidth = (drawW - style.healthPadLeft - style.healthPadRight)
     val shieldBarWidth = (drawW - style.shieldPadLeft - style.shieldPadRight)
 
-    val teamC = entity.let{ if(it is Teamc) it.team().color else Color.white }
+    val teamC = entity.runInst(Teamc::class) { it.team().color }?: Color.white
 
     Draw.z(0f)
     Draw.color(c1.set(style.backgroundColor).mulA(alpha))

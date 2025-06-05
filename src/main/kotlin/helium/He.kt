@@ -48,8 +48,11 @@ object He {
   const val MOD_NAME: String = "Helium"
 
   val modJsonURLs = arrayOf(
-    "https://raw.githubusercontent.com/EB-wilson/HeMindustryMods/master/mods.json",
-    //"https://cdn.jsdelivr.net/gh/eb-wiilson/hemindustrymods/mods.json"
+    "https://raw.githubusercontent.com/EB-wilson/HeMindustryMods/master/mods.json"
+  )
+
+  val defaultMirrors = arrayOf(
+    ""
   )
 
   /**模组内配置文件存放位置 */

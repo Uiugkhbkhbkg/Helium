@@ -3,8 +3,18 @@
   name: "he",
   author: "EBwilson",
   main: "helium.Helium",
-  description: "A mod provide optimized ui",
+  subtitle: "A mod provide optimized ui",
+  description: '''
+A mod provide optimized ui and more utilities.
+Major features:
+- ***In-Game Entity Information Components***: Provides various UI elements for game entities including units and blocks
+  - ***Health & Status Indicators***: Displays real-time status (health, shields) above units and entities. When shield stacks exceed max health, multi-layer shields with stack counters are shown.
+  - ***Attack Range Indicators***: Units and turrets now visualize their attack ranges as translucent areas. Processed boundaries emphasize combined team range contours to prevent visual clutter, with subtle pulsating animations and chromatic borders.
+  - ***Functional Block Effect Range Indicators***: Devices like Mend Projectors, Overdrive Projectors, and unit repair stations display effect ranges with distinctive colors.
+- ***Enhanced Block Placement Panel***: A refined block selection panel integrating a quick item bar and standardized tool buttons.
+- ***The better Mod Manager and Mod Browser***: Reworked the Mods Manager and Mods Browser, now they looks more aesthetically pleasing and functional
+''',
   version: "beta-0.6",
-  minGameVersion: 147,
+  minGameVersion: 149,
   hidden: true
 }

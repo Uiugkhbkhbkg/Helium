@@ -5,9 +5,9 @@ import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
-import arc.input.KeyCode
 import arc.math.Mathf
 import arc.math.geom.Geometry
+import arc.math.geom.QuadTree
 import arc.math.geom.Rect
 import arc.math.geom.Vec2
 import arc.scene.Group
@@ -73,18 +73,6 @@ class EntityInfoFrag {
     )
 
     private val Bits.bits: LongArray by accessField("bits")
-
-    @Suppress("KotlinConstantConditions")
-    private val selectKey = Binding::class.java.let {
-      if (it.isEnum) {
-        val sele = it.enumConstants.find { e -> (e as Enum<*>).name == "select" }
-        return@let Binding::class.java.getDeclaredField("defaultValue").also{ f -> f.isAccessible = true }
-          .get(sele) as KeyCode
-      }
-      else {
-        Binding.select.defaultValue as KeyCode
-      }
-    }
   }
 
   var controlling = false
@@ -95,8 +83,9 @@ class EntityInfoFrag {
   private val all = ObjectSet<EntityEntry>()
   private val displayQueue = Seq<EntityEntry>()
 
-  private val hovering = OrderedSet<EntityEntry>()
+  private val holding = OrderedSet<EntityEntry>()
   private val currHov = OrderedSet<EntityEntry>()
+  private var mouseHovering: EntityEntry? = null
 
   private var selecting = false
   private var clearTimer = 0f
@@ -464,13 +453,13 @@ class EntityInfoFrag {
         Drawf.poly(
           origX, origY, 4,
           rad, 0f,
-          if (hovering.contains(e)) Color.crimson else Pal.accent
+          if (holding.contains(e)) Color.crimson else Pal.accent
         )
       }
     }
 
     displayQueue.forEach { e ->
-      if (hovering.contains(e)) {
+      if (holding.contains(e)) {
         val rad = e.size*1.44f
         val ent = e.entity
         val origX = e.entity.x
@@ -505,7 +494,7 @@ class EntityInfoFrag {
 
         display.apply {
           if (
-            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
+            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
             || !model.shouldDisplay()
             || !model.checkWorldClip(worldViewport)
           ) return@r
@@ -519,7 +508,7 @@ class EntityInfoFrag {
     val mouse = Core.input.mouseWorld()
     val hotkeyDown = controlling || Core.input.keyDown(config.entityInfoHotKey)
     if (hotkeyDown) {
-      if (!selecting && Core.input.keyDown(selectKey)) {
+      if (!selecting && Core.input.keyDown(Binding.select)) {
         selecting = true
         clearTimer = Time.globalTime
         selectStart.set(mouse)
@@ -540,6 +529,7 @@ class EntityInfoFrag {
     }
 
     currHov.clear()
+    mouseHovering = null
 
     fun letEntity(entity: Teamc) {
       val e = tempEntry
@@ -558,16 +548,20 @@ class EntityInfoFrag {
         if (entry.isValid) {
           displayQueue.add(entry)
 
-          if (checkHovering(entity)) {
+          val res = checkHovering(entity)
+          if (res != 0) {
             currHov.add(entry)
+            if (res == 1) mouseHovering = entry
           }
         }
       }
       else {
         ent.showing = true
 
-        if (ent.isValid && checkHovering(entity)) {
+        val res = checkHovering(entity)
+        if (ent.isValid && res != 0) {
           currHov.add(ent)
+          if (res == 1) mouseHovering = ent
         }
       }
     }
@@ -604,15 +598,15 @@ class EntityInfoFrag {
       }
     }
 
-    if (selecting && !(hotkeyDown && Core.input.keyDown(selectKey))){
-      if (currHov.isEmpty && Time.globalTime - clearTimer < 15f) hovering.clear()
+    if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
+      if (currHov.isEmpty && Time.globalTime - clearTimer < 15f) holding.clear()
       else {
-        var anyAdded = currHov.size > hovering.size
+        var anyAdded = currHov.size > holding.size
         currHov.forEach { hov ->
-          anyAdded = hovering.add(hov) or anyAdded
+          anyAdded = holding.add(hov) or anyAdded
         }
 
-        if (!anyAdded) currHov.forEach { hovering.remove(it) }
+        if (!anyAdded) currHov.forEach { holding.remove(it) }
       }
 
       selecting = false
@@ -624,9 +618,9 @@ class EntityInfoFrag {
     while (itr.hasNext()) {
       val entry = itr.next()
 
-      if (!entry.entity.isAdded) hovering.remove(entry)
+      if (!entry.entity.isAdded) holding.remove(entry)
 
-      if (!entry.showing && !hovering.contains(entry))
+      if (!entry.showing && !holding.contains(entry))
         entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
       else entry.alpha = 1f
 
@@ -641,7 +635,7 @@ class EntityInfoFrag {
 
     if (!displayQueue.isEmpty) {
       val v = tmp.set(Core.input.mouseWorld())
-      displayQueue.sort { e -> if (hovering.contains(e)) -1f else e.entity.dst2(v) }
+      displayQueue.sort { e -> if (holding.contains(e)) -1f else e.entity.dst2(v) }
     }
   }
 
@@ -671,24 +665,24 @@ class EntityInfoFrag {
     }
   }
 
-  private fun checkHovering(entity: Posc): Boolean {
+  private fun checkHovering(entity: Posc): Int {
     val rect = selectionRect
+    val mouse = Core.input.mouseWorld()
 
     return when(entity){
-      is Hitboxc -> rect.overlaps(Tmp.r1.also { entity.hitbox(it) })
-      is Building -> {
-        val block = entity.block
-        val size = (block.size*Vars.tilesize).toFloat()
-        return rect.overlaps(
-          entity.x - size/2, entity.y - size/2,
-          size, size
-        )
+      is QuadTree.QuadTreeObject -> {
+        val box = Tmp.r1.also { entity.hitbox(it) }
+        if (box.contains(mouse)) 1
+        else if (rect.overlaps(box)) 2
+        else 0
       }
       else -> {
-        return rect.overlaps(
+        if (entity.dst(mouse) < 25) 1
+        else if ( rect.overlaps(
           entity.x - 5, entity.y - 5,
           10f, 10f
-        )
+        )) 2
+        else 0
       }
     }
   }
@@ -700,7 +694,7 @@ class EntityInfoFrag {
 
       e.display.forEach r@{
         it.first.apply {
-          if (!it.second.checkHovering(checkIsHovering(e)) && hoveringOnly) return@r
+          if (hoveringOnly && !it.second.checkHolding(checkIsHolding(e), mouseHovering == e)) return@r
           if (it.second == null){
             val model = obtainModel(e.entity)
             model.disabledTeam = disabledTeams.get(this) { Bits() }
@@ -751,7 +745,7 @@ class EntityInfoFrag {
 
         display.apply {
           if (
-            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
+            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
             || !model.shouldDisplay()
           ) return@f
           when (display.layoutSide) {
@@ -783,7 +777,7 @@ class EntityInfoFrag {
 
         display.apply {
           if (
-            (hoveringOnly && !model.checkHovering(checkIsHovering(e)))
+            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
             || !model.shouldDisplay()
           ) return@f
 
@@ -866,8 +860,8 @@ class EntityInfoFrag {
 
   private fun lineHeight() = Fonts.outline.capHeight*(0.25f/Scl.scl(1.0f)) + 3.0f
 
-  private fun checkIsHovering(e: EntityEntry) =
-    hovering.contains(e) || ((controlling || Core.input.keyDown(config.entityInfoHotKey)) && currHov.contains(e))
+  private fun checkIsHolding(e: EntityEntry) =
+    holding.contains(e) || ((controlling || Core.input.keyDown(config.entityInfoHotKey)) && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {
@@ -877,7 +871,6 @@ class EntityEntry : Poolable {
   var alpha = 0f
   var showing = false
   var isValid = false
-
 
   val display = Seq<MutablePair<EntityInfoDisplay<Model<*>>, Model<*>?>>()
 

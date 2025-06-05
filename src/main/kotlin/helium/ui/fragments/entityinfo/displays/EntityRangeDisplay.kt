@@ -172,9 +172,9 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     )
   }
 
-  override fun EntityRangeModel?.checkHovering(isHovered: Boolean): Boolean {
-    this?.hovering = isHovered
-    return isHovered
+  override fun EntityRangeModel?.checkHolding(isHold: Boolean, mouseHovering: Boolean): Boolean {
+    this?.hovering = isHold
+    return isHold
   }
 
   override fun EntityRangeModel.draw(alpha: Float) {

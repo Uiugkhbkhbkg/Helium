@@ -406,8 +406,8 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             buildModAttrIcons(status, stat)
 
             checkModUpdate(mod, {
-              checkUpdate.drawable = Icon.warningSmall
-              checkUpdate.setColor(Pal.redDust)
+              checkUpdate.drawable = HeAssets.networkError
+              checkUpdate.setColor(Color.red)
               updateTip!!.setText(Core.bundle["dialog.mods.checkUpdateFailed"])
             }){ res ->
               if (res.latestMod != null && res.updateValid) stat = stat or UP_TO_DATE
@@ -878,10 +878,12 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
               downloading = false
               if (e is InterruptedException) return@error
               Log.err(e)
-              UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+              Core.app.post {
+                UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+              }
             }
             .block { result ->
-              val json = Jval.read(result.getResultAsString())
+              val json = Jval.read(result.resultAsString)
               val assets = json.get("assets").asArray()
 
               val dexedAsset = assets.find { j ->
@@ -911,7 +913,9 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                 { e ->
                   if (e is InterruptedException) return@downloadToFile
                   Log.err(e)
-                  UIUtils.showException(e, Core.bundle["dialog.mods.downloadFailed"])
+                  Core.app.post {
+                    UIUtils.showException(e, Core.bundle["dialog.mods.downloadFailed"])
+                  }
                 }
               ) {
                 Core.app.post {
@@ -1020,7 +1024,6 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
       getModList(
         errHandler = { e ->
           Log.err(e)
-          UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
           errorHandler(e)
         }
       ) { list ->
@@ -1157,7 +1160,9 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             getModList(
               errHandler = { e ->
                 Log.err(e)
-                UIUtils.showException(e, Core.bundle["dialog.mods.checkFailed"])
+                list.clearChildren()
+                list.image(HeAssets.networkError).size(48f).pad(6f).color(Color.red)
+                list.add(Core.bundle["dialog.mods.checkFailed"], Styles.outlineLabel)
               }
             ) { ls ->
               var favI = 0
@@ -1610,7 +1615,7 @@ fun getModList(
         }
       }
       req.block { response ->
-        val strResult = response.getResultAsString()
+        val strResult = response.resultAsString
         try {
           modList = OrderedMap()
           val list = JsonIO.json.fromJson(Seq::class.java, ModListing::class.java, strResult) as Seq<ModListing>

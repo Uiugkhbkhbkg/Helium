@@ -25,6 +25,7 @@ object HeAssets {
   lateinit var javascript: Drawable
 
   lateinit var loading: Drawable
+  lateinit var networkError: Drawable
 
   lateinit var transparent: Drawable
   lateinit var grayUI: Drawable
@@ -57,6 +58,7 @@ object HeAssets {
         )
       }
     }
+    networkError = Helium.getDrawable("network-error")
 
     slotsBack = Helium.getDrawable("slots-back")
 

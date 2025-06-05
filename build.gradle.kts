@@ -56,7 +56,7 @@ repositories {
   mavenLocal()
   mavenCentral()
   maven ("https://maven.xpdustry.com/mindustry")
-  maven { url = uri("https://www.jitpack.io") }
+  maven ("https://www.jitpack.io")
 }
 
 dependencies {

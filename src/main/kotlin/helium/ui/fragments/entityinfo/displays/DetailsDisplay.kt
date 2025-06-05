@@ -13,9 +13,12 @@ import helium.ui.fragments.entityinfo.EntityInfoDisplay
 import helium.ui.fragments.entityinfo.InputCheckerModel
 import helium.ui.fragments.entityinfo.InputEventChecker
 import helium.ui.fragments.entityinfo.Side
+import helium.util.ifInst
+import mindustry.gen.Building
 import mindustry.gen.Icon
 import mindustry.gen.Posc
 import mindustry.gen.Teamc
+import mindustry.type.Category
 import mindustry.ui.Displayable
 import mindustry.ui.Styles
 
@@ -59,6 +62,25 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
       it.originY = 0f
     }
     entity.display(tab)
+
+    entity.ifInst<Building> { build ->
+      if (
+        (build.block.category == Category.distribution || build.block.category == Category.liquid)
+        && build.block.displayFlow
+      ){
+        tab.update {
+          if (!hovering) {
+            build.flowItems()?.stopFlow()
+            build.liquids?.stopFlow()
+          }
+          else {
+            build.flowItems()?.updateFlow()
+            build.liquids?.updateFlow()
+          }
+        }
+      }
+    }
+
     tab.marginBottom(tab.background.bottomHeight)
 
     tab.visible { !clipped }
@@ -79,7 +101,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     origX: Float,
     origY: Float,
     drawWidth: Float,
-    drawHeight: Float
+    drawHeight: Float,
   ): Boolean {
     val res = screenViewport.overlaps(
       origX, origY,
@@ -89,9 +111,9 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
     return res
   }
 
-  override fun DetailsModel?.checkHovering(isHovered: Boolean): Boolean {
+  override fun DetailsModel?.checkHolding(isHold: Boolean, mouseHovering: Boolean): Boolean {
     if (this != null) {
-      val res = isHovered && teamc?.let { !disabledTeam.get(it.team().id) }?: true
+      val res = mouseHovering && teamc?.let { !disabledTeam.get(it.team().id) } ?: true
       if (res) {
         hovering = true
         return true
@@ -99,7 +121,7 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
       hovering = false
       return fadeOut > 0f
     }
-    return isHovered
+    return mouseHovering
   }
 
   override fun DetailsModel.realWidth(prefSize: Float) = element.prefWidth

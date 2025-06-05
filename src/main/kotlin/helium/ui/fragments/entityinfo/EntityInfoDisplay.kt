@@ -36,7 +36,7 @@ abstract class EntityInfoDisplay<M: Model<*>>(
 
   abstract fun buildConfig(table: Table)
 
-  open fun M?.checkHovering(isHovered: Boolean) = isHovered
+  open fun M?.checkHolding(isHold: Boolean, mouseHovering: Boolean) = isHold
   open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {
     val clipSize = when(it){
       is Drawc -> it.clipSize()

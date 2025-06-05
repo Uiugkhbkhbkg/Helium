@@ -28,6 +28,7 @@ import arc.struct.OrderedMap
 import arc.struct.Seq
 import arc.util.Align
 import arc.util.Time
+import arc.util.Tmp
 import helium.He
 import helium.He.config
 import helium.ui.HeAssets
@@ -37,6 +38,7 @@ import helium.util.accessField
 import mindustry.Vars
 import mindustry.ai.UnitCommand
 import mindustry.ai.UnitStance
+import mindustry.content.Blocks
 import mindustry.core.UI
 import mindustry.game.EventType
 import mindustry.game.EventType.BlockInfoEvent
@@ -45,11 +47,14 @@ import mindustry.gen.Call
 import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustry.graphics.Pal
+import mindustry.input.Binding
+import mindustry.input.InputHandler
 import mindustry.type.Category
 import mindustry.ui.Fonts
 import mindustry.ui.Styles
 import mindustry.ui.fragments.PlacementFragment
 import mindustry.world.Block
+import mindustry.world.blocks.ConstructBlock.ConstructBuild
 import mindustry.world.meta.StatValues
 import kotlin.math.roundToInt
 
@@ -497,6 +502,10 @@ class HePlacementFrag {
   }
 
   private fun update() {
+    if (handleInput()){
+      rebuildCategory()
+    }
+
     if (selectionShown) {
       currentSlot?.also { slot ->
         if (slot.block != currBlock && currBlock != null) {
@@ -513,6 +522,84 @@ class HePlacementFrag {
         invAnimateActivating = false
       }
     }
+  }
+
+  private fun handleInput(): Boolean {
+    val input = Vars.control.input
+
+    if (updatePick(input)) return true
+
+    if (Vars.ui.chatfrag.shown() || Vars.ui.consolefrag.shown() || Core.scene.hasKeyboard()) return false
+
+    if (Core.input.keyTap(Binding.categoryPrev)) {
+      var i = 0
+      do {
+        currentCategory = currentCategory.prev()
+        i++
+      } while (categoryEmpty[currentCategory.ordinal] && i < categoryEmpty.size)
+      input.block = getSelectedBlock(currentCategory)
+      return true
+    }
+
+    if (Core.input.keyTap(Binding.categoryNext)) {
+      var i = 0
+      do {
+        currentCategory = currentCategory.next()
+        i++
+      } while (categoryEmpty[currentCategory.ordinal] && i < categoryEmpty.size)
+      input.block = getSelectedBlock(currentCategory)
+      return true
+    }
+
+    if (Core.input.keyTap(Binding.blockInfo)) {
+      val build = Vars.world.buildWorld(Core.input.mouseWorld().x, Core.input.mouseWorld().y)
+      val hovering = if (build == null) null else if (build is ConstructBuild) build.current else build.block
+      val displayBlock =
+        if (menuHoverBlock != null) menuHoverBlock else if (input.block != null) input.block else hovering
+      if (displayBlock != null && displayBlock.unlockedNow()) {
+        Vars.ui.content.show(displayBlock)
+        Events.fire(BlockInfoEvent())
+      }
+    }
+
+    return false
+  }
+
+  fun updatePick(input: InputHandler): Boolean {
+    if (Core.input.keyTap(Binding.pick) && Vars.player.isBuilder && !Core.scene.hasDialog()) { //mouse eyedropper select
+      var build = Vars.world.buildWorld(Core.input.mouseWorld().x, Core.input.mouseWorld().y)
+
+      if (build != null && build.inFogTo(Vars.player.team())) build = null
+
+      var tryRecipe = if (build == null) null else if (build is ConstructBuild) build.current else build.block
+      var tryConfig = if (build == null || !build.block.copyConfig) null else build.config()
+
+      for (req in Vars.player.unit().plans()) {
+        if (!req.breaking && req.block.bounds(req.x, req.y, Tmp.r1).contains(Core.input.mouseWorld())) {
+          tryRecipe = req.block
+          tryConfig = req.config
+          break
+        }
+      }
+
+      if (tryRecipe == null && Vars.state.rules.editor) {
+        val tile = Vars.world.tileWorld(Core.input.mouseWorldX(), Core.input.mouseWorldY())
+        if (tile != null) {
+          tryRecipe =
+            if (tile.block() !== Blocks.air) tile.block() else if (tile.overlay() !== Blocks.air) tile.overlay() else if (tile.floor() !== Blocks.air) tile.floor() else null
+        }
+      }
+
+      if (tryRecipe != null && ((tryRecipe.isVisible && unlocked(tryRecipe)) || Vars.state.rules.editor)) {
+        input.block = tryRecipe
+        tryRecipe.lastConfig = tryConfig
+        if (tryRecipe.isVisible) {
+          currentCategory = input.block.category
+        }
+        return true
+      }
+    }
+    return false
   }
 
   private fun buildBlockSelection(table: Table) {
