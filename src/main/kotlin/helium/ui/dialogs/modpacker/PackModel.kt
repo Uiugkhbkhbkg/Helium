@@ -1,7 +1,13 @@
 package helium.ui.dialogs.modpacker
 
-import java.io.File
-
+import arc.Core
+import arc.files.Fi
+import arc.scene.style.Drawable
+import arc.struct.ObjectSet
+import arc.struct.Seq
+import mindustry.gen.Icon
+import mindustry.mod.Mods
+import java.util.Locale.getDefault
 
 class PackModel {
   var name: String = ""
@@ -11,71 +17,35 @@ class PackModel {
   var author: String = ""
   var minGameVersion: String = "0"
 
-  var icon: File? = null
+  var icon: Fi? = null
   var installMessage: String? = null
+  var type: Type = Type.Distribute
 
-  var deleteAtExit: Boolean = false
-  var disableOther: Boolean = false
-  var shouldBackupData: Boolean = false
-  var shouldClearOldData: Boolean = false
+  var skipRepeat = false
+  var rawBackup = false
+  var force = false
+  var uncheck = false
 
-  var mods = HashSet<ModInfo>()
+  val mods = ObjectSet<Mods.LoadedMod>()
+  val fileEntries = Seq<Entry>()
 
-  fun selected(mod: ModInfo): Boolean {
-    return mods.contains(mod)
-  }
-
-  fun addMod(mod: ModInfo) {
-    mods.add(mod)
-  }
-
-  fun removeMod(mod: ModInfo) {
-    mods.remove(mod)
-  }
-
-  fun listMods(): MutableSet<ModInfo> {
-    return mods
-  }
-
-  open class Entry : Comparable<Entry> {
-    var fi: File? = null
+  open class Entry(
+    val fi: Fi,
     var to: String? = null
-
-    override fun compareTo(entry: Entry): Int {
-      return fi!!.getName().compareTo(entry.fi!!.getName())
+  ) : Comparable<Entry> {
+    override fun compareTo(other: Entry): Int {
+      return fi.name().compareTo(other.fi.name())
     }
   }
 
-  fun check(): Int {
-    val dependencies = HashMap<String?, Boolean>()
-    for (mod in mods) {
-      for (dependence in mod.dependencies) {
-        dependencies.putIfAbsent(dependence, false)
-      }
-      dependencies.put(mod.name, true)
-    }
+  enum class Type(val icon: Drawable){
+    Distribute(Icon.boxSmall),
+    Shadow(Icon.bookSmall),
+    Override(Icon.starSmall);
 
-    for (value in dependencies.values) {
-      if (!value) return 1
-    }
-
-    if (name.isEmpty() || version.isEmpty() || author.isEmpty() || displayName.isEmpty()) return 3
-
-    return 0
-  }
-
-  fun genMeta(generator: MetaGenerator): String {
-    return generator.genMeta(this)
-  }
-
-  companion object {
-    fun getStateMessage(stateCode: Int): String? {
-      return when (stateCode) {
-        1 -> "packer.requireDepend"
-        2 -> "packer.fileError"
-        3 -> "packer.metaMissing"
-        else -> null
-      }
-    }
+    val localized: String
+      get() = Core.bundle["modpack.${name.lowercase(getDefault())}.name"]
+    val description: String
+      get() = Core.bundle["modpack.${name.lowercase(getDefault())}.description"]
   }
 }

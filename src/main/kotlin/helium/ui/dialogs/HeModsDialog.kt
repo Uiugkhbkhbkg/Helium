@@ -56,7 +56,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 import kotlin.math.max
 
-private val switchBut: Button.ButtonStyle = Button.ButtonStyle().also {
+val switchBut: Button.ButtonStyle = Button.ButtonStyle().also {
   it.up = Styles.none
   it.over = HeAssets.grayUIAlpha
   it.down = HeAssets.grayUI
@@ -103,20 +103,44 @@ private class CullTable: Table{
 private fun Table.cullTable(background: Drawable? = null, build: Cons<Table>? = null) =
   add(CullTable(background).also { t -> build?.also { it.get(t) } })
 
-private fun Int.isEnabled() = this and ENABLED != 0
-private fun Int.isClientOnly() = this and CLIENT_ONLY != 0
-private fun Int.isJAR() = this and JAR_MOD != 0
-private fun Int.isJS() = this and JS_MOD != 0
-private fun Int.isUpToDate() = this and UP_TO_DATE != 0
-private fun Int.isDeprecated() = this and DEPRECATED != 0
-private fun Int.isUnsupported() = this and UNSUPPORTED != 0
-private fun Int.isLibMissing() = this and LIB_MISSING != 0
-private fun Int.isLibIncomplete() = this and LIB_INCOMPLETE != 0
-private fun Int.isLibCircleDepending() = this and LIB_CIRCLE_DEPENDING != 0
-private fun Int.isError() = this and ERROR != 0
-private fun Int.isBlackListed() = this and BLACKLIST != 0
+internal fun Int.isEnabled() = this and ENABLED != 0
+internal fun Int.isClientOnly() = this and CLIENT_ONLY != 0
+internal fun Int.isJAR() = this and JAR_MOD != 0
+internal fun Int.isJS() = this and JS_MOD != 0
+internal fun Int.isUpToDate() = this and UP_TO_DATE != 0
+internal fun Int.isDeprecated() = this and DEPRECATED != 0
+internal fun Int.isUnsupported() = this and UNSUPPORTED != 0
+internal fun Int.isLibMissing() = this and LIB_MISSING != 0
+internal fun Int.isLibIncomplete() = this and LIB_INCOMPLETE != 0
+internal fun Int.isLibCircleDepending() = this and LIB_CIRCLE_DEPENDING != 0
+internal fun Int.isError() = this and ERROR != 0
+internal fun Int.isBlackListed() = this and BLACKLIST != 0
 
-private fun Int.isValid() = this and (
+internal fun checkModStat(mod: Mods.LoadedMod): Int{
+  var res = 0b0
+
+  if (mod.enabled()) res = res or ENABLED
+  if (mod.meta.hidden) res = res or CLIENT_ONLY
+  if (mod.isJava) res = res or JAR_MOD
+  if (mod.root.child("scripts").exists()) {
+    val allScripts = mod.root.child("scripts").findAll { f -> f.extEquals("js") }
+    val main = if (allScripts.size == 1) allScripts.first() else mod.root.child("scripts").child("main.js")
+    if (main.exists() && !main.isDirectory()) {
+      res = res or JS_MOD
+    }
+  }
+  if (mod.isOutdated) res = res or DEPRECATED
+  if (!Version.isAtLeast(mod.meta.minGameVersion)) res = res or UNSUPPORTED
+  if (mod.hasUnmetDependencies()) res = res or LIB_MISSING
+  if (mod.state == ModState.incompleteDependencies) res = res or LIB_INCOMPLETE
+  if (mod.state == ModState.circularDependencies) res = res or LIB_CIRCLE_DEPENDING
+  if (mod.hasContentErrors()) res = res or ERROR
+  if (mod.isBlacklisted) res = res or BLACKLIST
+
+  return res
+}
+
+internal fun Int.isValid() = this and (
     DEPRECATED or
     UNSUPPORTED or
     LIB_MISSING or
@@ -126,7 +150,7 @@ private fun Int.isValid() = this and (
     BLACKLIST
 ) == 0
 
-private fun <T: Element> Cell<T>.addTip(tipText: String): Cell<T> {
+internal fun <T: Element> Cell<T>.addTip(tipText: String): Cell<T> {
   tooltip{ t -> t.table(HeAssets.padGrayUIAlpha) { tip ->
     tip.add(tipText, Styles.outlineLabel)
   }}
@@ -204,7 +228,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                 pane.line(Color.gray, true, 4f).padTop(6f).padBottom(6f)
                 pane.row()
                 pane.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
-                { generateModsPack() }.margin(4f)
+                { He.modPackerDialog.show() }.margin(4f)
                 pane.row()
                 pane.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
                 { openFolder() }.margin(4f)
@@ -323,7 +347,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             bot.button(Core.bundle["dialog.mods.refresh"], Icon.refresh, Styles.grayt, 46f)
             { refresh() }
             bot.button(Core.bundle["dialog.mods.exportPack"], Icon.list, Styles.grayt, 46f)
-            { generateModsPack() }
+            { He.modPackerDialog.show() }
             bot.button(Core.bundle["mods.openfolder"], Icon.save, Styles.grayt, 46f)
             { openFolder() }
             bot.button(Core.bundle["mods.guide"], Icon.link, Styles.grayt, 46f)
@@ -640,14 +664,6 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
       tipTable.add(Core.bundle["dialog.mods.shouldRelaunch"]).color(Color.crimson)
       tipTable.actions(Actions.alpha(1f, 0.3f, Interp.pow3Out))
     }
-  }
-
-  private fun generateModsPack() {
-    //TODO
-    UIUtils.showTip(
-      Core.bundle["infos.wip"],
-      Core.bundle["infos.notImplementYet"]
-    )
   }
 
   private fun openFolder() {
@@ -1036,30 +1052,6 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
         }
       }
     }
-  }
-
-  private fun checkModStat(mod: Mods.LoadedMod): Int{
-    var res = 0b0
-
-    if (mod.enabled()) res = res or ENABLED
-    if (mod.meta.hidden) res = res or CLIENT_ONLY
-    if (mod.isJava) res = res or JAR_MOD
-    if (mod.root.child("scripts").exists()) {
-      val allScripts = mod.root.child("scripts").findAll { f -> f.extEquals("js") }
-      val main = if (allScripts.size == 1) allScripts.first() else mod.root.child("scripts").child("main.js")
-      if (main.exists() && !main.isDirectory()) {
-        res = res or JS_MOD
-      }
-    }
-    if (mod.isOutdated) res = res or DEPRECATED
-    if (!Version.isAtLeast(mod.meta.minGameVersion)) res = res or UNSUPPORTED
-    if (mod.hasUnmetDependencies()) res = res or LIB_MISSING
-    if (mod.state == ModState.incompleteDependencies) res = res or LIB_INCOMPLETE
-    if (mod.state == ModState.circularDependencies) res = res or LIB_CIRCLE_DEPENDING
-    if (mod.hasContentErrors()) res = res or ERROR
-    if (mod.isBlacklisted) res = res or BLACKLIST
-
-    return res
   }
 
   private data class UpdateEntry(

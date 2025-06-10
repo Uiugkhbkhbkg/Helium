@@ -11,7 +11,7 @@ import arc.scene.ui.layout.Table
 import arc.scene.ui.layout.WidgetGroup
 import arc.util.ArcRuntimeException
 
-class HeCollapser(
+open class HeCollapser(
   private var collTable: Table,
   var collapse: Boolean,
   private val collX: Boolean,

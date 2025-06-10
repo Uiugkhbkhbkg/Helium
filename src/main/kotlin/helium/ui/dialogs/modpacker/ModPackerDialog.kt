@@ -1,0 +1,826 @@
+package helium.ui.dialogs.modpacker
+
+import arc.Core
+import arc.graphics.Color
+import arc.graphics.Texture
+import arc.graphics.g2d.TextureRegion
+import arc.math.Interp
+import arc.math.Mathf
+import arc.scene.style.BaseDrawable
+import arc.scene.style.Drawable
+import arc.scene.style.TextureRegionDrawable
+import arc.scene.ui.Button
+import arc.scene.ui.ScrollPane
+import arc.scene.ui.TextButton
+import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
+import arc.struct.ObjectMap
+import arc.util.Align
+import arc.util.Scaling
+import arc.util.Time
+import helium.addEventBlocker
+import helium.set
+import helium.ui.HeAssets
+import helium.ui.UIUtils.line
+import helium.ui.dialogs.*
+import helium.ui.elements.HeCollapser
+import helium.util.accessField
+import mindustry.Vars
+import mindustry.content.Planets
+import mindustry.ctype.UnlockableContent
+import mindustry.game.Saves
+import mindustry.gen.Icon
+import mindustry.gen.Tex
+import mindustry.graphics.Pal
+import mindustry.mod.Mods
+import mindustry.type.Planet
+import mindustry.ui.Styles
+import mindustry.ui.dialogs.BaseDialog
+import mindustry.ui.dialogs.CampaignRulesDialog
+import mindustry.ui.dialogs.LoadDialog
+import mindustry.ui.dialogs.PlanetDialog
+import universecore.ui.elements.markdown.Markdown
+import universecore.ui.elements.markdown.MarkdownStyles
+import kotlin.math.max
+
+class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
+  private val modTabs = ObjectMap<Mods.LoadedMod, Table>()
+
+  private var search = ""
+  private var showAll = false
+
+  private lateinit var model: PackModel
+
+  private lateinit var selectedTab: Table
+  private lateinit var unselectedTab: Table
+
+  private lateinit var optionsTab: Table
+  private lateinit var fileEntriesTab: Table
+  private var rebuildFiles = {}
+
+  private var optionShow = false
+  private var filesShow = false
+
+  private val selectCampaignDialog = object: PlanetDialog(){
+    val PlanetDialog.campaignRules: CampaignRulesDialog by accessField("campaignRules")
+
+    fun selectable(planet: Planet): Boolean {
+      return (planet.alwaysUnlocked && planet.isLandable) || planet.sectors.contains { obj -> obj.hasBase() } || debugSelect
+    }
+
+    init {
+      shown {
+        fill { t ->
+          t.top().left()
+          val pane = ScrollPane(null, Styles.smallPane)
+          t.add(pane).colspan(2).row()
+          t.button("@campaign.difficulty", Icon.bookSmall) {
+            campaignRules.show(state.planet)
+          }.margin(12f).size(208f, 40f).padTop(12f)
+            .visible { state.planet.allowCampaignRules && mode != Mode.planetLaunch }.row()
+          t.add().height(64f) //padding for close button
+          val starsTable = Table(Styles.black)
+          pane.setWidget(starsTable)
+          pane.setScrollingDisabled(true, false)
+
+          var starCount = 0
+          for (star in Vars.content.planets()) {
+            if (star.solarSystem !== star || !Vars.content.planets()
+                .contains { p: Planet? -> p!!.solarSystem === star && selectable(p) }
+            ) continue
+
+            starCount++
+            if (starCount > 1) starsTable.add(star.localizedName).padLeft(10f).padBottom(10f).padTop(10f).left()
+              .width(190f).row()
+            val planetTable = Table()
+            planetTable.margin(4f) //less padding
+            starsTable.add<Table?>(planetTable).left().row()
+            for (planet in Vars.content.planets()) {
+              if (planet.solarSystem === star && selectable(planet)) {
+                val planetButton: Button = planetTable.button(
+                  planet.localizedName,
+                  Icon.icons.get(planet.icon + "Small", Icon.icons.get(planet.icon, Icon.commandRallySmall)),
+                  Styles.flatTogglet
+                ) {
+                  viewPlanet(planet, false)
+                }.width(200f).height(40f).update { bb: TextButton? -> bb!!.setChecked(state.planet === planet) }
+                  .with { w: TextButton? -> w!!.marginLeft(10f) }.get()
+                planetButton.getChildren().get(1).setColor(planet.iconColor)
+                planetButton.setColor(planet.iconColor)
+                planetTable.background(Tex.pane).row()
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  val selectSchematicDialog = SelectSchematicDialog()
+
+  init {
+    shown{
+      model = PackModel()
+      rebuild()
+    }
+    resized(::rebuild)
+    hidden { modTabs.clear() }
+
+    addCloseButton()
+  }
+
+  fun rebuild() {
+    cont.clearChildren()
+    cont.table { main ->
+      main.top()
+      main.table { top ->
+        top.image(Icon.zoom).size(64f).scaling(Scaling.fit)
+        top.field(""){
+          search = it.lowercase()
+          rebuildList()
+        }.growX()
+        top.check(Core.bundle["dialog.modPacker.showAll"], showAll) {
+          showAll = it
+          rebuildList()
+        }
+      }.growX().padLeft(40f).padRight(40f)
+      main.row()
+      main.table { cent ->
+        cent.table { mods ->
+          mods.table { left ->
+            left.table(HeAssets.grayUIAlpha){ list ->
+              list.add(Core.bundle["dialog.modPacker.unselect"]).color(Pal.accent)
+              list.row()
+              list.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+              list.row()
+              list.top().pane(Styles.smallPane) { unselect ->
+                unselectedTab = unselect
+              }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top().get().setForceScroll(false, true)
+            }.fillX().growY()
+          }.fillX().growY()
+          mods.line(Color.gray, false, 4f).padLeft(6f).padRight(6f)
+          mods.table { right ->
+            right.table(HeAssets.grayUIAlpha){ list ->
+              list.add(Core.bundle["dialog.modPacker.select"]).color(Pal.accent)
+              list.row()
+              list.line(Pal.accent, true, 4f).padTop(6f).padBottom(6f)
+              list.row()
+              list.top().pane(Styles.smallPane) { select ->
+                selectedTab = select
+              }.width(Core.graphics.width/2.8f/Scl.scl()).fillY().top().get().setForceScroll(false, true)
+            }.fillX().growY()
+          }.fillX().growY()
+        }.fillX().growY()
+      }.grow()
+    }.fillX().growY()
+
+    cont.fill { over ->
+      over.addChild(Table(HeAssets.grayUIAlpha){ options ->
+        options.top().left().defaults().growX().pad(6f)
+        optionsTab = options
+        buildOptions(options)
+      })
+
+      over.addChild(Table(HeAssets.grayUIAlpha){ fileEntries ->
+        fileEntries.top().left().defaults().growX().pad(6f)
+        fileEntriesTab = fileEntries
+        buildFileEntries(fileEntries)
+      })
+
+      over.update {
+        val mouse = Core.input.mouse()
+
+        over.stageToLocalCoordinates(mouse)
+        val x = mouse.x
+        val y = mouse.y
+
+        if (y < 0 || y > over.height) {
+          optionShow = false
+          filesShow = false
+          return@update
+        }
+
+        if (!optionShow && x < 80){
+          optionShow = true
+        }
+        else if (optionShow && x > optionsTab.width){
+          optionShow = false
+        }
+
+        if (!filesShow && x > over.width - 80f) {
+          filesShow = true
+        }
+        else if (filesShow && x < over.width - optionsTab.width) {
+          filesShow = false
+        }
+      }
+
+      Core.app.post {
+        if (Core.graphics.isPortrait){
+          //TODO
+        }
+        else {
+          val scenW = cont.width
+          val scenH = cont.height
+
+          optionsTab.pack()
+          optionsTab.width = max(scenW/4f, optionsTab.width)
+          optionsTab.height = scenH
+          optionsTab.x = -optionsTab.width
+          optionsTab.update {
+            val toX = if (optionShow) 0f else -optionsTab.width
+            optionsTab.x = Mathf.lerpDelta(optionsTab.x, toX, 0.2f)
+          }
+
+          fileEntriesTab.pack()
+          fileEntriesTab.width = scenW/4f
+          fileEntriesTab.height = scenH
+          fileEntriesTab.x = scenW
+          fileEntriesTab.update {
+            val toX = if (filesShow) over.width - fileEntriesTab.width else over.width
+            fileEntriesTab.x = Mathf.lerpDelta(fileEntriesTab.x, toX, 0.2f)
+          }
+        }
+      }
+    }
+
+    rebuildList()
+  }
+
+  private fun buildOptions(options: Table) {
+    options.table(Tex.whiteui){
+      it.left()
+      it.add(Core.bundle["dialog.modPacker.options"], Styles.outlineLabel).pad(12f).left()
+    }.color(Pal.gray).pad(0f)
+    options.row()
+    options.line(Pal.darkerGray, true, 4f).pad(0f).padBottom(4f)
+    options.row()
+    options.pane(Styles.smallPane) { list ->
+      list.left().defaults().pad(6f).left().growX()
+      list.add(Core.bundle["dialog.modPacker.packInfo"]).color(Pal.accent)
+      list.row()
+      list.line(Pal.accent, true, 3f).padTop(0f)
+
+      list.row()
+      list.table(HeAssets.darkGrayUIAlpha){ tab ->
+        tab.left().defaults().pad(6f).left()
+        tab.add(Core.bundle["dialog.modPacker.packIcon"])
+        tab.row()
+        tab.left().table(Tex.whiteui){
+          it.image(Tex.nomap).size(200f)
+        }.color(Pal.darkerGray).margin(4f).fill()
+      }
+
+      list.row()
+      list.table(HeAssets.darkGrayUIAlpha){ tab ->
+        tab.left().defaults().pad(6f).left()
+        tab.add(Core.bundle["dialog.modPacker.packName"]).padBottom(0f)
+        tab.row()
+        tab.field(model.displayName){ model.displayName = it }.padTop(0f).growX()
+        tab.row()
+        tab.add(Core.bundle["dialog.modPacker.internalName"]).padBottom(0f)
+        tab.row()
+        tab.field(model.name){ model.name = it }.padTop(0f).growX()
+      }
+
+      list.row()
+      list.table(HeAssets.darkGrayUIAlpha){ tab ->
+        tab.left().defaults().pad(6f).left()
+        tab.add(Core.bundle["dialog.modPacker.description"]).padBottom(0f)
+        tab.row()
+        tab.area(model.description){ model.description = it }.padTop(0f).growX().height(120f)
+      }
+
+      list.row()
+      list.table{
+        it.defaults().growX().pad(6f)
+        it.table(HeAssets.darkGrayUIAlpha){ tab ->
+          tab.left().defaults().pad(6f).left()
+          tab.add(Core.bundle["dialog.modPacker.author"]).padBottom(0f)
+          tab.row()
+          tab.field(model.author){ a -> model.author = a }.padTop(0f).growX()
+        }
+
+        it.table(HeAssets.darkGrayUIAlpha) { tab ->
+          tab.left().defaults().pad(6f).left()
+          tab.add(Core.bundle["dialog.modPacker.version"]).padBottom(0f)
+          tab.row()
+          tab.field(model.version){ v -> model.version = v }.padTop(0f).growX()
+        }
+      }.pad(0f).growX().fillY()
+
+      list.row()
+      list.add(Core.bundle["dialog.modPacker.packConfig"]).color(Pal.accent)
+      list.row()
+      list.line(Pal.accent, true, 3f).padTop(0f)
+
+      list.row()
+      list.table(HeAssets.darkGrayUIAlpha) { tab ->
+        var hoveringType: PackModel.Type? = null
+
+        tab.left().defaults().pad(6f).left()
+        tab.add(Core.bundle["dialog.modPacker.type"]).padBottom(0f)
+        tab.row()
+        tab.table{ types ->
+          types.defaults().pad(4f).growX().fillY()
+
+          PackModel.Type.entries.forEach { type ->
+            types.button(type.localized, type.icon, Styles.flatTogglet){
+              model.type = type
+            }.margin(12f).update {
+              it.isChecked = model.type == type
+            }.get().let {
+              it.hovered { hoveringType = type }
+              it.exited { hoveringType = null }
+            }
+          }
+        }.growX().fillY()
+        tab.row()
+        tab.add("").update { desc ->
+          val type = hoveringType ?: model.type
+          desc.setText(type.description)
+        }.wrap().pad(12f).growX().color(Color.lightGray)
+      }
+
+      list.row()
+      list.table(HeAssets.darkGrayUIAlpha) { tab ->
+        tab.left().defaults().pad(6f).left().growX()
+        tab.check(Core.bundle["dialog.modPacker.skipRepeat"], model.skipRepeat)
+        { model.skipRepeat = it }.get().left()
+        tab.row()
+        tab.check(Core.bundle["dialog.modPacker.rawBackup"], model.rawBackup)
+        { model.rawBackup = it }.get().left()
+        tab.row()
+        tab.check(Core.bundle["dialog.modPacker.force"], model.force)
+        { model.force = it }.get().left()
+        tab.row()
+        tab.check(Core.bundle["dialog.modPacker.uncheck"], model.uncheck)
+        { model.uncheck = it }.get().left()
+      }
+    }.growX().fillY()
+  }
+
+  private fun buildFileEntries(file: Table) {
+    file.table(Tex.whiteui){
+      it.left()
+      it.add(Core.bundle["dialog.modPacker.fileEntries"], Styles.outlineLabel).pad(12f).left()
+    }.color(Pal.gray).pad(0f)
+    file.row()
+    file.line(Pal.darkerGray, true, 3f).pad(0f).padBottom(4f)
+    file.row()
+    file.table { t ->
+      t.top().pane(Styles.smallPane){ list ->
+        rebuildFiles = {
+          list.clearChildren()
+
+          model.fileEntries.forEach { entry ->
+            val tab = buildFileTab(entry)
+            list.add(tab).growX().padTop(4f).padBottom(4f)
+            list.row()
+          }
+        }
+      }.growX().fillY()
+    }.grow()
+
+    val coll = object: Table({ col ->
+      col.left().defaults().left().growX().padLeft(6f).padRight(6f)
+      col.button(Core.bundle["dialog.modPacker.map"], Icon.mapSmall, Styles.flatt){
+        selectMap()
+      }.margin(8f)
+      col.row()
+      col.button(Core.bundle["dialog.modPacker.campaign"], Icon.planetSmall, Styles.flatt){
+        selectCampaign()
+      }.margin(8f)
+      col.row()
+      col.button(Core.bundle["dialog.modPacker.schematic"], Icon.bookSmall, Styles.flatt){
+        selectSchematic()
+      }.margin(8f)
+      col.row()
+      col.button(Core.bundle["dialog.modPacker.settings"], Icon.settingsSmall, Styles.flatt){
+        selectSettings()
+      }.margin(8f)
+      col.row()
+      col.button(Core.bundle["dialog.modPacker.customFile"], Icon.addSmall, Styles.flatt){
+        selectCustomFile()
+      }.margin(8f)
+    }){
+      override fun validate() {
+        if (parent != null && width != parent.width) {
+          y = parent.height
+          width = parent.width
+          invalidate()
+        }
+        super.validate()
+      }
+    }
+    coll.visible = false
+    file.row()
+    file.button(Core.bundle["dialog.modPacker.addFile"], object: BaseDrawable(Icon.addSmall){
+      override fun draw(x: Float, y: Float, width: Float, height: Float) {
+        (if (!coll.visible) Icon.addSmall else Icon.cancelSmall).draw(x, y, width, height)
+      }
+    }, Styles.flatt){
+      coll.visible = !coll.visible
+    }.margin(8f).padTop(0f).update {
+      it.setText(if (!coll.visible) Core.bundle["dialog.modPacker.addFile"] else Core.bundle["misc.cancel"])
+    }.get().let { t ->
+      coll.pack()
+      t.addChild(coll)
+    }
+  }
+
+  private fun buildFileTab(entry: PackModel.Entry): Table {
+    return Table(HeAssets.darkGrayUIAlpha){ tab ->
+      val ext = entry.fi.extension()
+
+      val img = when(ext){
+        "png", "jpg" -> TextureRegionDrawable(TextureRegion(Texture(entry.fi)))
+        "msav" -> Icon.map
+        "msch" -> Icon.book
+        "bin" -> Icon.settings
+        else -> Icon.image
+      }
+
+      tab.image(img).scaling(Scaling.fit).size(64f).pad(6f)
+      tab.table { info ->
+        info.left()
+        info.table{ t ->
+          t.add(entry.fi.name()).pad(6f).left().growX()
+          t.button(Icon.cancel, Styles.clearNonei, 24f){
+            model.fileEntries.remove(entry)
+            rebuildFiles()
+          }.margin(4f)
+        }.growX()
+        info.row()
+        info.table(Tex.whiteui){ ent ->
+          ent.labelWrap(entry.fi.path()).color(Color.lightGray).growX()
+          ent.row()
+          ent.table{ t ->
+            t.image(Icon.rightSmall).size(24f).scaling(Scaling.fit)
+            t.add("modpack/")
+            t.field(entry.to?:"") {
+              entry.to = it
+            }.growX()
+          }.growX()
+        }.margin(6f).color(Color.black).growX().fillY()
+      }.growX().fillY()
+    }.margin(6f)
+  }
+
+  private fun selectMap() {
+    object: LoadDialog(Core.bundle["dialog.modPacker.map"]) {
+      override fun modifyButton(button: TextButton, slot: Saves.SaveSlot) {
+        button.clicked {
+          if (!button.childrenPressed()) {
+            if (!model.fileEntries.contains { it.fi == slot.file }) {
+              model.fileEntries.add(
+                PackModel.Entry(
+                  slot.file,
+                  "saves"
+                )
+              )
+              rebuildFiles()
+            }
+            hide()
+          }
+        }
+      }
+    }.show()
+  }
+
+  private fun selectCampaign() {
+    selectCampaignDialog.showSelect(Planets.serpulo.sectors.first()) { s ->
+      if (!model.fileEntries.contains { it.fi == s.save.file }) {
+        model.fileEntries.add(
+          PackModel.Entry(
+            s.save.file,
+            "saves"
+          )
+        )
+        rebuildFiles()
+      }
+    }
+  }
+
+  private fun selectSchematic() {
+    selectSchematicDialog.show { s ->
+      val f = s.file
+      if (!model.fileEntries.contains { it.fi == f }) {
+        model.fileEntries.add(
+          PackModel.Entry(
+            f,
+            "schematics"
+          )
+        )
+        rebuildFiles()
+      }
+    }
+  }
+
+  private fun selectSettings() {
+    val f = Core.settings.settingsFile
+    if (!model.fileEntries.contains { it.fi == f }) {
+      model.fileEntries.add(
+        PackModel.Entry(
+          f,
+          ""
+        )
+      )
+      rebuildFiles()
+    }
+  }
+
+  private fun selectCustomFile() {
+    TODO("Not yet implemented")
+  }
+
+  private fun rebuildList() {
+    selectedTab.clearChildren()
+    unselectedTab.clearChildren()
+
+    Vars.mods.list()
+      .filter { showAll || checkModStat(it).isValid() }
+      .forEach { mod ->
+        val tab = buildModTab(mod)
+
+        if (model.mods.contains(mod)) {
+          selectedTab.add(tab).fillY().growX().pad(4f)
+          selectedTab.row()
+        }
+        else {
+          unselectedTab.add(tab).fillY().growX().pad(4f)
+          unselectedTab.row()
+        }
+      }
+  }
+
+  private fun buildModTab(mod: Mods.LoadedMod): Table {
+    modTabs[mod]?.let { return it }
+
+    val res = Table()
+    val stat = checkModStat(mod)
+    var coll: HeCollapser? = null
+    var setupContent = { i: Int -> }
+
+    modTabs[mod] = res
+
+    res.button({ top ->
+      top.table(Tex.buttonSelect) { icon ->
+        icon.image(mod.iconTexture?.let { TextureRegionDrawable(TextureRegion(it)) } ?: Tex.nomap)
+          .scaling(Scaling.fit).size(80f)
+      }.pad(10f).margin(4f).size(88f)
+      top.stack(
+        Table{ info ->
+          info.left().top().margin(12f).marginLeft(6f).defaults().left()
+          info.add(mod.meta.displayName).color(Pal.accent).grow().padRight(160f).wrap()
+          info.row()
+          info.add(mod.meta.version, 0.8f).color(Color.lightGray).grow().padRight(50f).wrap()
+          info.row()
+          info.add(mod.meta.shortDescription()).grow().padRight(50f).wrap()
+        },
+        Table{ over ->
+          over.right()
+
+          over.table { status ->
+            status.top().defaults().size(26f).pad(4f)
+
+            buildModAttrIcons(status, stat)
+
+            if (stat.isLibMissing()) status.image(Icon.layersSmall).scaling(Scaling.fit).color(Color.crimson)
+              .addTip(Core.bundle["dialog.mods.libMissing"])
+            else if (stat.isLibIncomplete()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+              .addTip(Core.bundle["dialog.mods.libIncomplete"])
+            else if (stat.isLibCircleDepending()) status.image(Icon.refresh).scaling(Scaling.fit).color(Color.crimson)
+              .addTip(Core.bundle["dialog.mods.libCircleDepending"])
+
+            if (stat.isError()) status.image(Icon.cancelSmall).scaling(Scaling.fit).color(Color.crimson)
+              .addTip(Core.bundle["dialog.mods.error"])
+            if (stat.isBlackListed()) status.image(Icon.infoCircle).scaling(Scaling.fit).color(Color.crimson)
+              .addTip(Core.bundle["dialog.mods.blackListed"])
+          }.fill().pad(4f)
+
+          over.table { side ->
+            side.line(Color.darkGray, false, 3f)
+            side.table { buttons ->
+              val selected = model.mods
+
+              buttons.defaults().width(45f).growY()
+              buttons.button(Icon.rightOpenSmall, Styles.clearNonei, 48f) {
+                if (!selected.add(mod)) selected.remove(mod)
+                rebuildList()
+              }.fillX().growY()
+                .update { it.style.imageUp = if (selected.contains(mod)) Icon.leftOpen else Icon.rightOpen }
+
+              buttons.addEventBlocker()
+            }.fillX().growY()
+          }.fillX().growY().marginTop(6f).marginBottom(6f)
+        }
+      ).grow()
+    }, Styles.grayt) {
+      coll!!.toggle()
+      if (!coll!!.collapse) {
+        setupContent(0)
+      }
+    }.growX().fillY()
+
+    res.row()
+    coll = res.add(HeCollapser(collX = false, collY = true, collapsed = true, Styles.grayPanel) { col ->
+      col.table { details ->
+        details.left().defaults().growX().pad(4f).padLeft(12f).padRight(12f)
+
+        details.add(Core.bundle.format("dialog.mods.author", mod.meta.author))
+          .growX().padRight(50f).wrap().color(Pal.accent).labelAlign(Align.left)
+        details.row()
+        details.table { link ->
+          link.left().image(Icon.githubSmall).scaling(Scaling.fit).size(24f).color(Color.lightGray)
+          val linkButton = link.button("...", Styles.nonet) {}
+            .padLeft(4f).padRight(50f).wrapLabel(true)
+            .growX().left().align(Align.left).height(30f).disabled(true).get()
+
+          linkButton.label.setAlignment(Align.left)
+          linkButton.label.setFontScale(0.9f)
+          getModList(
+            errHandler = {
+              linkButton.isDisabled = true
+              linkButton.setText(Core.bundle["dialog.mods.checkFailed"])
+            }
+          ) { modList ->
+            val modInfo = modList[Name(mod)]
+
+            if (modInfo == null) {
+              linkButton.isDisabled = true
+              linkButton.setText(Core.bundle["dialog.mods.noGithubRepo"])
+            }
+            else {
+              val url = "https://github.com/${modInfo.repo}"
+              linkButton.isDisabled = false
+              linkButton.setText(url)
+              linkButton.clicked { Core.app.openURI(url) }
+            }
+          }
+        }
+        details.row()
+        details.table{ status ->
+          status.left().defaults().left()
+
+          if (stat.isValid()) {
+            buildStatus(status, Icon.okSmall, Core.bundle["dialog.mods.modStatCorrect"], Pal.heal)
+          }
+          else {
+            buildStatus(
+              status,
+              Icon.cancelSmall,
+              Core.bundle["dialog.mods.modStatError"],
+              Color.crimson
+            )
+          }
+
+          buildModAttrList(status, stat)
+
+          if (stat.isLibMissing()) {
+            helium.ui.dialogs.buildStatus(
+              status,
+              Icon.layersSmall,
+              Core.bundle["dialog.mods.libMissing"],
+              Color.crimson
+            )
+          }
+          else if (stat.isLibIncomplete()) {
+            helium.ui.dialogs.buildStatus(
+              status,
+              Icon.warningSmall,
+              Core.bundle["dialog.mods.libIncomplete"],
+              Color.crimson
+            )
+          }
+          else if (stat.isLibCircleDepending()) {
+            helium.ui.dialogs.buildStatus(
+              status,
+              Icon.rotateSmall,
+              Core.bundle["dialog.mods.libCircleDepending"],
+              Color.crimson
+            )
+          }
+
+          if (stat.isError()) {
+            helium.ui.dialogs.buildStatus(status, Icon.cancelSmall, Core.bundle["dialog.mods.error"], Color.crimson)
+          }
+          if (stat.isBlackListed()) {
+            helium.ui.dialogs.buildStatus(
+              status,
+              Icon.infoCircleSmall,
+              Core.bundle["dialog.mods.blackListed"],
+              Color.crimson
+            )
+          }
+        }
+        details.row()
+        details.line(Color.gray, true, 4f).pad(6f).padLeft(-6f).padRight(-6f)
+        details.row()
+
+        val contents = Vars.content.contentMap.map { it.toList() }
+          .flatten()
+          .filterIsInstance<UnlockableContent>()
+          .filter { c -> c.minfo.mod === mod && !c.isHidden }
+
+        var current = -1
+        details.table { switch ->
+          switch.left().defaults().center()
+          switch.button({ it.add(Core.bundle["dialog.mods.description"], 0.85f) }, switchBut) { setupContent(0) }
+            .margin(12f).checked { current == 0 }.disabled { t -> t.isChecked }
+          switch.button({ it.add(Core.bundle["dialog.mods.rawText"], 0.85f) }, switchBut) { setupContent(1) }
+            .margin(12f).checked { current == 1 }.disabled { t -> t.isChecked }
+          if (contents.any()) {
+            switch.button({ it.add(Core.bundle["dialog.mods.contents"], 0.85f) }, switchBut) { setupContent(2) }
+              .margin(12f).checked { current == 2 }.disabled { t -> t.isChecked }
+          }
+        }.grow().padBottom(0f)
+        details.row()
+        details.table(HeAssets.grayUI) { desc ->
+          desc.defaults().grow()
+          setupContent = a@{ i ->
+            if (i == current) return@a
+
+            desc.clearChildren()
+            current = i
+
+            when (i) {
+              0 -> desc.add(Markdown(mod.meta.description ?: "", MarkdownStyles.defaultMD))
+              1 -> desc.add(mod.meta.description ?: "").wrap()
+              2 -> {
+                Core.app.post {
+                  val n = (desc.width/Scl.scl(50f)).toInt()
+                  contents.forEachIndexed { i, c ->
+                    if (i > 0 && i%n == 0) desc.row()
+
+                    desc.button(TextureRegionDrawable(c.uiIcon), Styles.flati, Vars.iconMed) {
+                      Vars.ui.content.show(c)
+                    }.size(50f).with { im ->
+                      val click = im.clickListener
+                      im.update {
+                        im.image.color.lerp(
+                          if (!click.isOver) Color.lightGray else Color.white,
+                          0.4f*Time.delta
+                        )
+                      }
+                    }.tooltip(c.localizedName)
+                  }
+                }
+              }
+            }
+          }
+        }.grow().margin(12f).padTop(0f)
+      }.grow()
+    }.also { it.setDuration(0.3f, Interp.pow3Out) }).growX().fillY().colspan(2).get()
+
+    return res
+  }
+
+  private fun buildModAttrIcons(status: Table, stat: Int) {
+    if (stat.isJAR()) status.image(HeAssets.java).scaling(Scaling.fit).color(Pal.reactorPurple)
+      .addTip(Core.bundle["dialog.mods.jarMod"])
+    if (stat.isJS()) status.image(HeAssets.javascript).scaling(Scaling.fit).color(Pal.accent)
+      .addTip(Core.bundle["dialog.mods.jsMod"])
+    if (!stat.isClientOnly()) status.image(Icon.hostSmall).scaling(Scaling.fit).color(Pal.techBlue)
+      .addTip(Core.bundle["dialog.mods.hostMod"])
+
+    if (stat.isDeprecated()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+      .addTip(
+        Core.bundle.format(
+          "dialog.mods.deprecated",
+          if (stat.isJAR()) Vars.minJavaModGameVersion else Vars.minModGameVersion
+        )
+      )
+    else if (stat.isUnsupported()) status.image(Icon.warningSmall).scaling(Scaling.fit).color(Color.crimson)
+      .addTip(Core.bundle["dialog.mods.unsupported"])
+  }
+
+  fun buildStatus(status: Table, icon: Drawable, information: String, color: Color) {
+    status.image(icon).scaling(Scaling.fit).color(color).size(26f).pad(4f)
+    status.add(information, 0.85f).color(color)
+    status.row()
+  }
+
+  private fun buildModAttrList(status: Table, stat: Int) {
+    if (stat.isJAR()) {
+      buildStatus(status, HeAssets.java, Core.bundle["dialog.mods.jarMod"], Pal.reactorPurple)
+    }
+    if (stat.isJS()) {
+      buildStatus(status, HeAssets.javascript, Core.bundle["dialog.mods.jsMod"], Pal.accent)
+    }
+    if (!stat.isClientOnly()) {
+      buildStatus(status, Icon.hostSmall, Core.bundle["dialog.mods.hostMod"], Pal.techBlue)
+    }
+
+    if (stat.isDeprecated()) {
+      buildStatus(
+        status, Icon.warningSmall, Core.bundle.format(
+          "dialog.mods.deprecated",
+          if (stat.isJAR()) Vars.minJavaModGameVersion else Vars.minModGameVersion
+        ), Color.crimson
+      )
+    }
+    else if (stat.isUnsupported()) {
+      buildStatus(status, Icon.warningSmall, Core.bundle["dialog.mods.unsupported"], Color.crimson)
+    }
+  }
+}

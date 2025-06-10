@@ -19,6 +19,7 @@ import helium.graphics.HeShaders
 import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.dialogs.*
+import helium.ui.dialogs.modpacker.ModPackerDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
 import helium.ui.fragments.entityinfo.displays.DetailsDisplay
 import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
@@ -80,6 +81,7 @@ object He {
 
   lateinit var configDialog: ModConfigDialog
   lateinit var heModsDialog: HeModsDialog
+  lateinit var modPackerDialog: ModPackerDialog
 
   private fun update() {
     global.autosave()
@@ -121,6 +123,8 @@ object He {
 
     heModsDialog = HeModsDialog()
     setupHeModsDialog(heModsDialog)
+
+    modPackerDialog = ModPackerDialog()
 
     setupGlobalListeners()
 
