@@ -1,15 +1,9 @@
-package helium.ui.dialogs.modpacker
+package main
 
 import arc.Core
 import arc.files.Fi
-import arc.files.ZipFi
-import arc.graphics.Texture
-import arc.scene.style.Drawable
 import arc.struct.ObjectSet
 import arc.struct.Seq
-import helium.util.ModStat.checkModStat
-import mindustry.gen.Icon
-import mindustry.mod.Mods
 import java.util.Locale.getDefault
 
 class PackModel {
@@ -33,32 +27,9 @@ class PackModel {
   open class ModEntry(
     val fi: Fi,
     val name: String,
-    val displayName: String,
-    val shortDesc: String,
-    val description: String?,
     val version: String,
-    val author: String,
-    val iconTexture: Texture?,
-    var minMajorVersion: Int,
-
-    var stat: Int
+    val author: String
   ){
-    val root = ZipFi(fi)
-
-    constructor(loadedMod: Mods.LoadedMod): this(
-      loadedMod.file,
-      loadedMod.name,
-      loadedMod.meta.displayName,
-      loadedMod.meta.shortDescription(),
-      loadedMod.meta.description,
-      loadedMod.meta.version,
-      loadedMod.meta.author,
-      loadedMod.iconTexture,
-      loadedMod.minMajor,
-
-      checkModStat(loadedMod)
-    )
-
     override fun hashCode(): Int {
       return name.hashCode() + author.hashCode() * 31
     }
@@ -80,10 +51,10 @@ class PackModel {
     }
   }
 
-  enum class Type(val icon: Drawable){
-    Distribute(Icon.boxSmall),
-    Shadow(Icon.bookSmall),
-    Override(Icon.starSmall);
+  enum class Type{
+    Distribute,
+    Shadow,
+    Override;
 
     val localized: String
       get() = Core.bundle["modpack.${name.lowercase(getDefault())}.name"]

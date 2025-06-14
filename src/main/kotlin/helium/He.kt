@@ -69,6 +69,9 @@ object He {
   /**模组持久全局变量备份文件 */
   val globalVarsBackup: Fi = dataDirectory.child("global_vars.bin.bak")
 
+  /**整合包模板文件*/
+  val modpackModel = Helium.getInternalFile("model/ModpackModel.jar")
+
   lateinit var config: HeConfig
   lateinit var global: Settings
 

@@ -20,7 +20,14 @@ class Helium : Mod() {
 
   companion object {
     fun getInternalFile(path: String): Fi {
-      return He.modFile.child(path)
+      val paths = path.split('/')
+      var res = He.modFile
+
+      paths.forEach {
+        res = res.child(it)
+      }
+
+      return res
     }
 
     fun <T: Drawable> getDrawable(spriteName: String): T =

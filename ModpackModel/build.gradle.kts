@@ -1,4 +1,3 @@
-
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileOutputStream
 import java.io.InputStreamReader
@@ -18,13 +17,9 @@ val buildDir = layout.buildDirectory.get()
 plugins {
   java
   kotlin("jvm") version "2.1.20"
-  `maven-publish`
 }
 
-group = "com.github.EB-wilson"
-version = "beta-0.7"
-
-run { "java SyncBundles.java $version".execute() }
+run { "java ../SyncBundles.java $version".execute(projectDir) }
 
 java {
   sourceCompatibility = JavaVersion.VERSION_1_8
@@ -39,18 +34,6 @@ kotlin {
   }
 }
 
-publishing {
-  publications {
-    create<MavenPublication>("maven") {
-      from(components["java"])
-
-      groupId = "com.github.EB-wilson"
-      artifactId = "Helium"
-      version = "${project.version}"
-    }
-  }
-}
-
 repositories {
   mavenLocal()
   mavenCentral()
@@ -62,32 +45,17 @@ dependencies {
   compileOnly("com.github.Anuken.Arc:arc-core:$arcVersion")
   compileOnly("com.github.Anuken.Mindustry:core:$mindustryVersion")
 
-  implementation("com.github.EB-wilson.UniverseCore:markdown:2.3.1")
-
   implementation(kotlin("stdlib-jdk8"))
 }
 
 tasks {
   jar {
-    dependsOn(":ModpackModel:deploy")
-
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = "${project.name}-desktop.jar"
-
-    from(rootDir) {
-      include("mod.hjson")
-      include("icon.png")
-      include("contributors.hjson")
-    }
 
     from("assets/") {
       include("**")
       exclude("git")
-    }
-
-    from(project(":ModpackModel").layout.buildDirectory.dir("libs")) {
-      include("ModpackModel.jar")
-      into("model")
     }
 
     from(configurations.getByName("runtimeClasspath").map { if (it.isDirectory) it else zipTree(it) })
@@ -154,42 +122,6 @@ tasks {
     from (
       zipTree("${buildDir}/libs/${project.name}-desktop.jar"),
       zipTree("${buildDir}/libs/${project.name}-android.jar")
-    )
-
-    doLast {
-      if (!modOutputDir.isNullOrEmpty()) {
-        copy {
-          into("$modOutputDir/")
-          from("${buildDir}/libs/${project.name}.jar")
-        }
-      }
-    }
-  }
-
-  register("deployDesktop", Jar::class) {
-    dependsOn("jar")
-    archiveFileName = "${project.name}.jar"
-
-    from (zipTree("${buildDir}/libs/${project.name}-desktop.jar"))
-
-    doLast {
-      if (!modOutputDir.isNullOrEmpty()) {
-        copy {
-          into("$modOutputDir/")
-          from("${buildDir}/libs/${project.name}.jar")
-        }
-      }
-    }
-  }
-
-  register("debugMod", JavaExec::class) {
-    dependsOn("classes")
-    dependsOn("deployDesktop")
-
-    mainClass = "-jar"
-    args = listOf(
-      project.properties["debugGamePath"] as? String?:"",
-      "-debug"
     )
   }
 }
