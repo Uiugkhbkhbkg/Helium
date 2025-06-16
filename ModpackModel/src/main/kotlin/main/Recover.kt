@@ -30,12 +30,16 @@ class Recover: Mod() {
             recoverBackup()
 
             dialog.hide()
-            Vars.ui.showOkText(Core.bundle["misc.recoverCompleted"], Core.bundle["dialog.recovering.complete"]){
-              Core.app.exit()
+            Core.app.post {
+              Vars.ui.showOkText(Core.bundle["misc.recoverCompleted"], Core.bundle["dialog.recovering.complete"]) {
+                Core.app.exit()
+              }
             }
           } catch (e: Throwable) {
             Log.err(e)
-            Vars.ui.showException(Core.bundle["misc.recoverFailed"], e)
+            Core.app.post {
+              Vars.ui.showException(Core.bundle["misc.recoverFailed"], e)
+            }
           }
         }.start()
       }

@@ -5,6 +5,7 @@ import arc.files.Fi
 import arc.files.ZipFi
 import arc.func.Cons2
 import arc.graphics.Texture
+import arc.struct.Seq
 import arc.util.io.Streams
 import arc.util.serialization.Jval
 import helium.He
@@ -17,18 +18,31 @@ import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
 import java.util.jar.JarOutputStream
 
+object ModpackStat{
+  const val METAINFO_INVALID = 0b0001
+  const val FILES_INVALID = 0b0010
+  const val MODS_INVALID = 0b0100
+  const val MODS_DEPEND_INVALID = 0b1000
+
+  fun Int.isCorrect() = this == 0
+  fun Int.metainfoError() = this and METAINFO_INVALID != 0
+  fun Int.filesError() = this and FILES_INVALID != 0
+  fun Int.modsError() = this and MODS_INVALID != 0
+  fun Int.modDependenciesError() = this and MODS_DEPEND_INVALID != 0
+}
+
 object ModpackUtil {
-  fun genMeta(model: PackModel): String {
+  private fun genMeta(model: PackModel): String {
     val res: Jval = Jval.newObject()
     res.add("isModpack", Jval.valueOf(true))
 
-    res.add("name", model.name)
+    res.add("name", model.name.ifBlank { model.displayName })
     res.add("displayName", model.displayName)
     res.add("description", model.description)
     res.add("version", model.version)
     res.add("author", model.author)
 
-    res.add("minGameVersion", "${model.mods.maxOf { it.minMajorVersion }}")
+    res.add("minGameVersion", "${model.enabled().maxOf { it.minMajorVersion }}")
     res.add("hidden", Jval.valueOf(true))
 
     res.add("skipRepeat", Jval.valueOf(model.skipRepeat))
@@ -39,7 +53,7 @@ object ModpackUtil {
     res.add("packType", model.type.name)
 
     val modList: Jval = Jval.newArray()
-    for (mod in model.mods) {
+    for (mod in model.enabled()) {
       val modInfo: Jval = Jval.newObject()
       modInfo.add("name", mod.name)
       modInfo.add("version", mod.version)
@@ -52,6 +66,28 @@ object ModpackUtil {
     res.add("main", "main.Installer")
 
     return res.toString(Jval.Jformat.formatted)
+  }
+
+  fun checkModel(model: PackModel): Int {
+    var res = 0
+
+    ModpackStat.apply {
+      if (model.displayName.isBlank() || model.version.isBlank() || model.author.isBlank()) res = METAINFO_INVALID
+      for (entry in model.fileEntries) {
+        if (!entry.fi.exists() || entry.to == null) res = res or FILES_INVALID
+      }
+      if (!model.uncheck){
+        val mods = model.enabled()
+        mods.forEach { mod ->
+          if (mod.dependencies.any { dep -> mods.find { it.name == dep } == null }) {
+            res = res or MODS_DEPEND_INVALID
+            return@apply
+          }
+        }
+      }
+    }
+
+    return res
   }
 
   fun genFile(model: PackModel, toFile: Fi){
@@ -83,7 +119,7 @@ object ModpackUtil {
         write.closeEntry()
       }
 
-      model.mods.forEach{ m ->
+      model.enabled().forEach{ m ->
         write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.${m.fi.extension()}"))
         write.write(m.fi.readBytes())
         write.closeEntry()
@@ -116,8 +152,6 @@ object ModpackUtil {
 
   @Throws(IOException::class)
   fun readModpackFile(model: PackModel, file: Fi){
-    val ext = file.extension()
-    if (ext != "jar" && ext != "zip") throw IOException("unexpected extension $ext")
     val tmp = Vars.tmpDirectory.child("tmp.jar")
     file.copyTo(tmp)
     val fi = ZipFi(tmp)
@@ -157,8 +191,7 @@ object ModpackUtil {
 
         val mod = Vars.mods.getMod(m.getString("name"))
         if (mod != null) {
-          val modEnt = PackModel.ModEntry(mod)
-          model.mods.add(modEnt)
+          model.mods.find { c -> c.name == mod.name }?.enabled = true
         }
         else {
           val meta = Jval.read(metaFi.reader())
@@ -170,6 +203,7 @@ object ModpackUtil {
             author = m.getString("author"),
             displayName = meta.getString("displayName"),
             description = meta.getString("description"),
+            dependencies = meta.get("dependencies")?.asArray()?.map { it.asString() }?: Seq(),
             minMajorVersion = meta.getString("minGameVersion", "0")
               .split(".")[0]
               .toInt(),
@@ -178,6 +212,7 @@ object ModpackUtil {
             iconTexture = open.child("icon.png").let { if (it.exists()) Texture(it) else null }
           )
           model.mods.add(modEnt)
+          modEnt.enabled = true
         }
       }
     }

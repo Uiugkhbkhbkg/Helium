@@ -30,6 +30,8 @@ class PackModel {
   val mods = ObjectSet<ModEntry>()
   val fileEntries = Seq<FileEntry>()
 
+  fun enabled() = mods.filter { it.enabled }
+
   open class ModEntry(
     val fi: Fi,
     val name: String,
@@ -38,11 +40,13 @@ class PackModel {
     val description: String?,
     val version: String,
     val author: String,
+    val dependencies: Seq<String>,
     val iconTexture: Texture?,
     var minMajorVersion: Int,
 
     var stat: Int
   ){
+    var enabled = false
     val root = ZipFi(fi)
 
     constructor(loadedMod: Mods.LoadedMod): this(
@@ -53,6 +57,7 @@ class PackModel {
       loadedMod.meta.description,
       loadedMod.meta.version,
       loadedMod.meta.author,
+      loadedMod.meta.dependencies,
       loadedMod.iconTexture,
       loadedMod.minMajor,
 

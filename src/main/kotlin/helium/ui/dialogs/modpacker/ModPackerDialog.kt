@@ -15,12 +15,10 @@ import arc.scene.ui.ScrollPane
 import arc.scene.ui.TextButton
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
-import arc.struct.ObjectMap
 import arc.util.Align
 import arc.util.Scaling
 import arc.util.Time
 import helium.addEventBlocker
-import helium.set
 import helium.ui.HeAssets
 import helium.ui.UIUtils
 import helium.ui.UIUtils.line
@@ -30,13 +28,13 @@ import helium.ui.dialogs.getModList
 import helium.ui.dialogs.switchBut
 import helium.ui.elements.HeCollapser
 import helium.util.ModStat
-import helium.util.ModStat.checkModStat
 import helium.util.ModStat.isValid
 import helium.util.accessField
 import mindustry.Vars
 import mindustry.content.Planets
 import mindustry.ctype.UnlockableContent
 import mindustry.game.Saves
+import mindustry.game.Schematics
 import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustry.graphics.Pal
@@ -52,12 +50,10 @@ import java.io.IOException
 import kotlin.math.max
 
 class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
-  private val modTabs = ObjectMap<PackModel.ModEntry, Table>()
-
   private var search = ""
   private var showAll = false
 
-  private var model = PackModel()
+  private var model = PackModel().also { initModel(it) }
 
   private lateinit var selectedTab: Table
   private lateinit var unselectedTab: Table
@@ -131,10 +127,14 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
     }
     resized(::rebuild)
     hidden {
-      modTabs.clear()
       model = PackModel()
+      initModel(model)
       Vars.tmpDirectory.delete()
     }
+  }
+
+  private fun initModel(model: PackModel) {
+    Vars.mods.list().forEach { mod -> model.mods.add(PackModel.ModEntry(mod)) }
   }
 
   fun rebuild() {
@@ -203,6 +203,12 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
       cont.table { main ->
         main.top()
         main.table { top ->
+          if (Core.app.isMobile) {
+            top.button(Icon.list, Styles.clearNonei, 32f) {
+              optionShow = true
+              filesShow = false
+            }.margin(6f)
+          }
           top.image(Icon.zoom).size(64f).scaling(Scaling.fit)
           top.field("") {
             search = it.lowercase()
@@ -211,6 +217,12 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
           top.check(Core.bundle["dialog.modPacker.showAll"], showAll) {
             showAll = it
             rebuildList()
+          }
+          if (Core.app.isMobile) {
+            top.button(Icon.file, Styles.clearNonei, 32f){
+              filesShow = true
+              optionShow = false
+            }.margin(6f)
           }
         }.growX().padLeft(40f).padRight(40f)
         main.row()
@@ -243,7 +255,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
         main.table { buttons ->
           buttons.defaults().width(210f).height(62f).pad(4f)
           buttons.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f) { hide() }
-          buttons.button(Core.bundle["dialog.modPacker.openFIle"], Icon.file, Styles.grayt, 46f) {
+          buttons.button(Core.bundle["dialog.modPacker.editFIle"], Icon.file, Styles.grayt, 46f) {
             openModpack()
           }
           buttons.button(Core.bundle["dialog.modPacker.export"], Icon.export, Styles.grayt, 46f) {
@@ -312,7 +324,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
             fileEntriesTab.x = Mathf.lerpDelta(fileEntriesTab.x, toX, 0.2f)
           }
 
-          over.update {
+          if (!Core.app.isMobile) over.update {
             val mouse = Core.input.mouse()
 
             over.stageToLocalCoordinates(mouse)
@@ -347,9 +359,24 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
   }
 
   private fun exportModpack() {
-    Vars.platform.showFileChooser(false, Core.bundle["dialog.modPacker.options"], "zip"){ file ->
-      ModpackUtil.genFile(model, file)
-      UIUtils.showTip(Core.bundle["misc.complete"], Core.bundle["dialog.modPacker.completed"])
+    val stat = ModpackUtil.checkModel(model)
+
+    ModpackStat.apply {
+      if (stat.isCorrect()) {
+        Vars.platform.showFileChooser(false, Core.bundle["dialog.modPacker.options"], "zip") { file ->
+          ModpackUtil.genFile(model, file)
+          UIUtils.showTip(Core.bundle["misc.complete"], Core.bundle["dialog.modPacker.completed"])
+        }
+      }
+      else {
+        UIUtils.showTip(Core.bundle["dialog.modPacker.failed"], when{
+          stat.metainfoError() -> Core.bundle["dialog.modPacker.metaError"]
+          stat.filesError() -> Core.bundle["dialog.modPacker.filesError"]
+          stat.modsError() -> Core.bundle["dialog.modPacker.modsError"]
+          stat.modDependenciesError() -> Core.bundle["dialog.modPacker.modsDependenciesError"]
+          else -> throw RuntimeException("?")
+        })
+      }
     }
   }
 
@@ -357,6 +384,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
     Vars.platform.showMultiFileChooser(
       { file ->
         val new = PackModel()
+        initModel(new)
 
         try {
           ModpackUtil.readModpackFile(new, file)
@@ -403,6 +431,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
         tab.add(Core.bundle["dialog.modPacker.packName"]).padBottom(0f)
         tab.row()
         tab.field(model.displayName){ model.displayName = it }.padTop(0f).growX()
+          .update { it.setColor(if (it.text.isBlank()) Color.red else Color.white) }
         tab.row()
         tab.add(Core.bundle["dialog.modPacker.internalName"]).padBottom(0f)
         tab.row()
@@ -425,6 +454,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
           tab.add(Core.bundle["dialog.modPacker.author"]).padBottom(0f)
           tab.row()
           tab.field(model.author){ a -> model.author = a }.padTop(0f).growX()
+            .update { f -> f.setColor(if (f.text.isBlank()) Color.red else Color.white) }
         }
 
         it.table(HeAssets.darkGrayUIAlpha) { tab ->
@@ -432,6 +462,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
           tab.add(Core.bundle["dialog.modPacker.version"]).padBottom(0f)
           tab.row()
           tab.field(model.version){ v -> model.version = v }.padTop(0f).growX()
+            .update { f -> f.setColor(if (f.text.isBlank()) Color.red else Color.white) }
         }
       }.pad(0f).growX().fillY()
 
@@ -567,7 +598,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
       val img = when(ext){
         "png", "jpg" -> TextureRegionDrawable(TextureRegion(Texture(entry.fi)))
         "msav" -> Icon.map
-        "msch" -> Icon.book
+        "msch" -> TextureRegionDrawable(TextureRegion(Vars.schematics.getPreview(Schematics.read(entry.fi))))
         "bin" -> Icon.settings
         else -> Icon.file
       }
@@ -676,17 +707,10 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
     selectedTab.clearChildren()
     unselectedTab.clearChildren()
 
-    val l = Vars.mods.list()
-      .filter { showAll || checkModStat(it).isValid() }
-      .map { PackModel.ModEntry(it) }
-      .toMutableList()
-
-    model.mods.forEach { if (!l.contains(it)) l.add(it) }
-
-    l.forEach { modEnt ->
+    model.mods.forEach { modEnt ->
       val tab = buildModTab(modEnt)
 
-      if (model.mods.contains(modEnt)) {
+      if (modEnt.enabled) {
         selectedTab.add(tab).fillY().growX().pad(4f)
         selectedTab.row()
       }
@@ -698,14 +722,10 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
   }
 
   private fun buildModTab(mod: PackModel.ModEntry): Table {
-    modTabs[mod]?.let { return it }
-
     val res = Table()
     val stat = mod.stat
     var coll: HeCollapser? = null
     var setupContent = { i: Int -> }
-
-    modTabs[mod] = res
 
     res.button({ top ->
       top.table(Tex.buttonSelect) { icon ->
@@ -749,11 +769,10 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
             side.table { buttons ->
               buttons.defaults().width(45f).growY()
               buttons.button(Icon.rightOpenSmall, Styles.clearNonei, 48f) {
-                val selected = model.mods
-                if (!selected.add(mod)) selected.remove(mod)
+                mod.enabled = !mod.enabled
                 rebuildList()
               }.fillX().growY()
-                .update { it.style.imageUp = if (model.mods.contains(mod)) Icon.leftOpen else Icon.rightOpen }
+                .update { it.style.imageUp = if (mod.enabled) Icon.leftOpen else Icon.rightOpen }
 
               buttons.addEventBlocker()
             }.fillX().growY()

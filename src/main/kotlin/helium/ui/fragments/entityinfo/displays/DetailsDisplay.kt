@@ -83,7 +83,6 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
 
     tab.marginBottom(tab.background.bottomHeight)
 
-    tab.visible { !clipped }
     return tab
   }
 
@@ -138,7 +137,6 @@ class DetailsDisplay: EntityInfoDisplay<DetailsModel>(::DetailsModel), InputEven
 
   override fun DetailsModel.update(delta: Float) {
     fadeOut = Mathf.approach(fadeOut, if (hovering) 1f else 0f, delta*0.06f)
-    if (fadeOut <= 0f) element.visible = false
-    else element.visible = true
+    element.visible = !(fadeOut <= 0f || !clipped)
   }
 }

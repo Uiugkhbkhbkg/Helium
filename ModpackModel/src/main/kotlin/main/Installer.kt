@@ -140,12 +140,16 @@ class Installer: Mod() {
                 try {
                   ModpackUtil.installModpack(model)
                   dialog.hide()
-                  Vars.ui.showOkText(Core.bundle["misc.installComplete"], Core.bundle["dialog.installPack.complete"]){
-                    Core.app.exit()
+                  Core.app.post {
+                    Vars.ui.showOkText(Core.bundle["misc.installComplete"], Core.bundle["dialog.installPack.complete"]){
+                      Core.app.exit()
+                    }
                   }
                 } catch (e: Throwable) {
                   Log.err(e)
-                  Vars.ui.showException(Core.bundle["misc.installFailed"], e)
+                  Core.app.post {
+                    Vars.ui.showException(Core.bundle["misc.installFailed"], e)
+                  }
                 }
               }.start()
             }
