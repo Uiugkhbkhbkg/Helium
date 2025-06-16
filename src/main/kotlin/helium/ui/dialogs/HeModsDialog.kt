@@ -387,6 +387,7 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
             }){ res ->
               ModStat.apply {
                 if (res.latestMod != null && res.updateValid) stat = stat or UP_TO_DATE
+                if (res.latestMod == null) stat = stat or LOCAL_FILE
 
                 if (stat.isUpToDate()) {
                   checkUpdate.drawable = Icon.upSmall
@@ -396,12 +397,21 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                   updateTip!!.setText(Core.bundle.format("dialog.mods.updateValid", res.latestMod!!.version))
                 }
 
-                if (stat.isValid()) {
-                  if (stat.isEnabled() && !stat.isUpToDate()) {
-                    checkUpdate.drawable = Icon.okSmall
-                    checkUpdate.setColor(Pal.heal)
+                if (stat.isLocalFile()) {
+                  status.image(Icon.fileSmall).scaling(Scaling.fit)
+                    .color(Color.white)
+                    .addTip(Core.bundle["dialog.mods.localFile"])
+                }
 
-                    updateTip!!.setText(Core.bundle["dialog.mods.isLatest"])
+                if (stat.isValid()) {
+                  if (!stat.isUpToDate()) {
+                    if (stat.isEnabled()) {
+                      checkUpdate.drawable = Icon.okSmall
+                      checkUpdate.setColor(Pal.heal)
+
+                      updateTip!!.setText(Core.bundle["dialog.mods.isLatest"])
+                    }
+                    else checkUpdate.visible = false
                   }
                 }
                 else {
@@ -502,6 +512,14 @@ class HeModsDialog: BaseDialog(Core.bundle["mods"]) {
                   buildStatus(t, Icon.upSmall, Core.bundle["dialog.mods.updateValidS"], HeAssets.lightBlue)
                 }, false
               ) { stat.isUpToDate() }.fill().colspan(2)
+              status.row()
+
+              status.collapser(
+                { t ->
+                  t.left().defaults().left()
+                  buildStatus(t, Icon.fileSmall, Core.bundle["dialog.mods.localFile"], Color.white)
+                }, false
+              ) { stat.isLocalFile() }.fill().colspan(2)
               status.row()
 
               if (stat.isValid()) {

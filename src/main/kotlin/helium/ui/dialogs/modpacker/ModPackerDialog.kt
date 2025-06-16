@@ -1,11 +1,13 @@
 package helium.ui.dialogs.modpacker
 
 import arc.Core
+import arc.files.Fi
 import arc.graphics.Color
 import arc.graphics.Texture
 import arc.graphics.g2d.TextureRegion
 import arc.math.Interp
 import arc.math.Mathf
+import arc.scene.event.HandCursorListener
 import arc.scene.event.Touchable
 import arc.scene.style.BaseDrawable
 import arc.scene.style.Drawable
@@ -388,7 +390,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
 
         try {
           ModpackUtil.readModpackFile(new, file)
-        } catch (e: IOException){
+        } catch (e: Exception){
           UIUtils.showException(e)
         }
 
@@ -421,8 +423,32 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
         tab.add(Core.bundle["dialog.modPacker.packIcon"])
         tab.row()
         tab.left().table(Tex.whiteui){
-          it.image(Tex.nomap).size(200f)
-        }.color(Pal.darkerGray).margin(4f).fill()
+          var fi: Fi? = null
+
+          it.image(Tex.nomap).size(200f).update { i ->
+            if (model.icon != null && fi != model.icon) {
+              fi = model.icon
+              i.setDrawable(TextureRegionDrawable(TextureRegion(Texture(fi))))
+            }
+          }
+        }.color(Pal.darkerGray).margin(4f).fill().get().also { img ->
+          img.addListener(HandCursorListener())
+          img.clicked {
+            Vars.platform.showMultiFileChooser(
+              { file ->
+                try {
+                  val tst = Texture(file)
+                  if (tst.width != tst.height) throw RuntimeException("width must equal height")
+
+                  model.icon = file
+                } catch (e: Throwable) {
+                  UIUtils.showException(e, Core.bundle["dialog.modPacker.imageError"])
+                }
+              }, ".png", ".jpg")
+          }
+        }
+        tab.row()
+        tab.add(Core.bundle["dialog.modPacker.iconRequire"]).padBottom(6f).color(Color.lightGray)
       }
 
       list.row()

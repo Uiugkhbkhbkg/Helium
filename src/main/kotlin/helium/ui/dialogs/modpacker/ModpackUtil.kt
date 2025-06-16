@@ -13,10 +13,14 @@ import helium.util.CLIENT_ONLY
 import helium.util.JAR_MOD
 import helium.util.JS_MOD
 import mindustry.Vars
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
 import java.util.jar.JarOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipException
+import java.util.zip.ZipOutputStream
 
 object ModpackStat{
   const val METAINFO_INVALID = 0b0001
@@ -29,6 +33,13 @@ object ModpackStat{
   fun Int.filesError() = this and FILES_INVALID != 0
   fun Int.modsError() = this and MODS_INVALID != 0
   fun Int.modDependenciesError() = this and MODS_DEPEND_INVALID != 0
+}
+
+private fun each(path: String, fi: Fi, cons: Cons2<String, Fi>){
+  fi.list()?.forEach {
+    if (it.isDirectory) each("$path/${it.name()}", it, cons)
+    else cons.get(path, it)
+  }
 }
 
 object ModpackUtil {
@@ -120,8 +131,25 @@ object ModpackUtil {
       }
 
       model.enabled().forEach{ m ->
-        write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.${m.fi.extension()}"))
-        write.write(m.fi.readBytes())
+        m.fi.also { f ->
+          if (f.isDirectory){
+            val bytes = ByteArrayOutputStream()
+            ZipOutputStream(bytes).use { compressor ->
+              each("", f){ p, file ->
+                compressor.putNextEntry(ZipEntry("$p/${file.name()}"))
+                compressor.write(file.readBytes())
+                compressor.closeEntry()
+              }
+            }
+
+            write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.zip"))
+            write.write(bytes.toByteArray())
+          }
+          else {
+            write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.${m.fi.extension()}"))
+            write.write(f.readBytes())
+          }
+        }
         write.closeEntry()
       }
 
@@ -150,7 +178,7 @@ object ModpackUtil {
     return res
   }
 
-  @Throws(IOException::class)
+  @Throws(IOException::class, ZipException::class)
   fun readModpackFile(model: PackModel, file: Fi){
     val tmp = Vars.tmpDirectory.child("tmp.jar")
     file.copyTo(tmp)
@@ -220,12 +248,7 @@ object ModpackUtil {
       throw IOException("Mod pack error! a mod file was error.", e)
     }
 
-    fun each(path: String, fi: Fi, cons: Cons2<String, Fi>){
-      fi.list()?.forEach {
-        if (it.isDirectory) each("$path/${it.name()}", it, cons)
-        else cons.get(path, it)
-      }
-    }
+
 
     each("", fi.child("assets")){ p, f ->
       model.fileEntries.add(PackModel.FileEntry(

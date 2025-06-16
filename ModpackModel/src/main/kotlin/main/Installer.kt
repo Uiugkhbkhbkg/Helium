@@ -27,8 +27,8 @@ class Installer: Mod() {
 
   override fun init() {
     val file = Vars.mods.getMod(Installer::class.java).root
-    val icon = model.icon?.let { TextureRegionDrawable(TextureRegion(Texture(it))) }
     ModpackUtil.readModpackFile(model, file)
+    val icon = model.icon?.let { TextureRegionDrawable(TextureRegion(Texture(it))) }
 
     Events.on(EventType.ClientLoadEvent::class.java) { e ->
       BaseDialog(Core.bundle["dialog.installPack.title"]).apply {
@@ -62,7 +62,7 @@ class Installer: Mod() {
                   bar.add(Core.bundle.get("dialog.installPack.description")).color(Color.gray)
                   bar.row()
                   bar.add(model.description).wrap().grow().top()
-                    .labelAlign(Align.topLeft)
+                    .minWidth(280f).labelAlign(Align.topLeft)
                   bar.row()
                   bar.add(Core.bundle.get("dialog.installPack.contains")).color(Color.gray)
                   bar.row()

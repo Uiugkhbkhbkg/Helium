@@ -4,18 +4,19 @@ import mindustry.core.Version
 import mindustry.mod.Mods
 import mindustry.mod.Mods.ModState
 
-const val ENABLED              = 0b000000000001
-const val CLIENT_ONLY          = 0b000000000010
-const val JAR_MOD              = 0b000000000100
-const val JS_MOD               = 0b000000001000
-const val UP_TO_DATE           = 0b000000010000
-const val DEPRECATED           = 0b000000100000
-const val UNSUPPORTED          = 0b000001000000
-const val LIB_MISSING          = 0b000010000000
-const val LIB_INCOMPLETE       = 0b000100000000
-const val LIB_CIRCLE_DEPENDING = 0b001000000000
-const val ERROR                = 0b010000000000
-const val BLACKLIST            = 0b100000000000
+const val ENABLED              = 0b0000000000001
+const val CLIENT_ONLY          = 0b0000000000010
+const val JAR_MOD              = 0b0000000000100
+const val JS_MOD               = 0b0000000001000
+const val UP_TO_DATE           = 0b0000000010000
+const val LOCAL_FILE           = 0b0000000100000
+const val DEPRECATED           = 0b0000001000000
+const val UNSUPPORTED          = 0b0000010000000
+const val LIB_MISSING          = 0b0000100000000
+const val LIB_INCOMPLETE       = 0b0001000000000
+const val LIB_CIRCLE_DEPENDING = 0b0010000000000
+const val ERROR                = 0b0100000000000
+const val BLACKLIST            = 0b1000000000000
 
 object ModStat {
   fun Int.isEnabled() = this and ENABLED != 0
@@ -23,6 +24,7 @@ object ModStat {
   fun Int.isJAR() = this and JAR_MOD != 0
   fun Int.isJS() = this and JS_MOD != 0
   fun Int.isUpToDate() = this and UP_TO_DATE != 0
+  fun Int.isLocalFile() = this and LOCAL_FILE != 0
   fun Int.isDeprecated() = this and DEPRECATED != 0
   fun Int.isUnsupported() = this and UNSUPPORTED != 0
   fun Int.isLibMissing() = this and LIB_MISSING != 0

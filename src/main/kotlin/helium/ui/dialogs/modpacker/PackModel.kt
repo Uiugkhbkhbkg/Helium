@@ -47,7 +47,7 @@ class PackModel {
     var stat: Int
   ){
     var enabled = false
-    val root = ZipFi(fi)
+    val root = if (fi.isDirectory) fi else ZipFi(fi)
 
     constructor(loadedMod: Mods.LoadedMod): this(
       loadedMod.file,
