@@ -48,7 +48,6 @@ import mindustry.ui.dialogs.LoadDialog
 import mindustry.ui.dialogs.PlanetDialog
 import universecore.ui.elements.markdown.Markdown
 import universecore.ui.elements.markdown.MarkdownStyles
-import java.io.IOException
 import kotlin.math.max
 
 class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
@@ -125,13 +124,14 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
 
   init {
     shown{
+      model = PackModel()
+      initModel(model)
+      Vars.tmpDirectory.deleteDirectory()
       rebuild()
     }
     resized(::rebuild)
     hidden {
-      model = PackModel()
-      initModel(model)
-      Vars.tmpDirectory.delete()
+      Vars.tmpDirectory.deleteDirectory()
     }
   }
 
@@ -256,7 +256,11 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
         main.row()
         main.table { buttons ->
           buttons.defaults().width(210f).height(62f).pad(4f)
-          buttons.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f) { hide() }
+          buttons.button(Core.bundle["back"], Icon.leftOpen, Styles.grayt, 46f) {
+            UIUtils.showConfirm(Core.bundle["back"], Core.bundle["dialog.modPacker.discard"]){
+              hide()
+            }
+          }
           buttons.button(Core.bundle["dialog.modPacker.editFIle"], Icon.file, Styles.grayt, 46f) {
             openModpack()
           }
@@ -431,7 +435,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
               i.setDrawable(TextureRegionDrawable(TextureRegion(Texture(fi))))
             }
           }
-        }.color(Pal.darkerGray).margin(4f).fill().get().also { img ->
+        }.color(Pal.darkerGray).margin(4f).left().get().also { img ->
           img.addListener(HandCursorListener())
           img.clicked {
             Vars.platform.showMultiFileChooser(

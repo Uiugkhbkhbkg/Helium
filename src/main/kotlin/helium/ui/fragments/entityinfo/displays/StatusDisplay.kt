@@ -6,15 +6,15 @@ import arc.graphics.g2d.Draw
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
-import arc.struct.Bits
 import arc.struct.Seq
 import arc.util.Align
 import arc.util.Scaling
 import arc.util.Tmp
 import helium.He
+import helium.ui.fragments.entityinfo.DisplayProvider
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
-import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
+import helium.ui.fragments.entityinfo.TargetGroup
 import mindustry.Vars
 import mindustry.gen.Icon
 import mindustry.gen.Posc
@@ -28,51 +28,53 @@ import kotlin.math.max
 private val iconSize = Scl.scl(26f)
 private val iconPadding = Scl.scl(4f)
 
-class StatusModel: Model<Statusc>{
-  override lateinit var entity: Statusc
-  override lateinit var disabledTeam: Bits
+class StatusDisplayProvider: DisplayProvider<Statusc, StatusDisplay>(){
+  override val typeID: Int get() = 1237687141
 
-  var singleWidth = 1f
-  val statusList = Seq<StatusEffect>()
-
-  override fun setup(ent: Statusc) {
-    singleWidth = iconSize
-  }
-
-  override fun reset() {
-    statusList.clear()
-    singleWidth = iconSize
-  }
-}
-
-class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
-  override val layoutSide: Side = Side.TOP
-
-  override val StatusModel.prefHeight: Float
-    get() = iconSize
-  override val StatusModel.prefWidth: Float
-    get() = iconSize
-
+  override fun targetGroup() = listOf(TargetGroup.unit)
   override fun valid(entity: Posc) = entity is Statusc
   override fun enabled() = He.config.enableUnitStatusDisplay
+  override fun provide(
+    entity: Statusc,
+    id: Int
+  ) = StatusDisplay(entity, id).apply {
+    singleWidth = iconSize
+  }
 
   override fun buildConfig(table: Table) {
     table.image(Icon.layers).size(64f).scaling(Scaling.fit)
     table.row()
     table.add(Core.bundle["infos.statusDisplay"], Styles.outlineLabel)
   }
+}
 
-  override fun StatusModel.shouldDisplay(): Boolean {
+class StatusDisplay(
+  entity: Statusc,
+  id: Int
+): EntityInfoDisplay<Statusc>(entity, id) {
+  override val typeID: Int get() = 1237687141
+
+  var singleWidth = 1f
+  val statusList = Seq<StatusEffect>()
+
+  override val layoutSide: Side = Side.TOP
+
+  override val prefHeight: Float
+    get() = iconSize
+  override val prefWidth: Float
+    get() = iconSize
+
+  override fun shouldDisplay(): Boolean {
     return statusList.any()
   }
 
-  override fun StatusModel.realHeight(prefSize: Float): Float{
+  override fun realHeight(prefSize: Float): Float{
     val n = Mathf.ceil(prefSize/(singleWidth + iconPadding))
     return n*iconSize
   }
-  override fun StatusModel.realWidth(prefSize: Float) = prefSize
+  override fun realWidth(prefSize: Float) = prefSize
 
-  override fun StatusModel.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
+  override fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
     var offX = 0f
     var offY = 0f
 
@@ -94,7 +96,7 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
     singleWidth = newSingleW
   }
 
-  private fun StatusModel.drawStatus(
+  private fun drawStatus(
     status: StatusEffect,
     alpha: Float, scale: Float,
     origX: Float, origY: Float,
@@ -142,7 +144,7 @@ class StatusDisplay: EntityInfoDisplay<StatusModel>(::StatusModel) {
     }
   }
 
-  override fun StatusModel.update(delta: Float) {
+  override fun update(delta: Float) {
     val list = statusList
     list.clear()
     Vars.content.statusEffects().forEach { eff ->

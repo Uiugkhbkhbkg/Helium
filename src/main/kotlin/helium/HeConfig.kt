@@ -5,6 +5,8 @@ import arc.input.KeyCode
 import arc.util.Log
 import arc.util.Threads
 import arc.util.serialization.Jval
+import helium.graphics.HeShaders
+import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
 import java.io.IOException
 
 private typealias RArray = java.lang.reflect.Array
@@ -41,6 +43,11 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var enableRangeDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
+  @ConfigItem var lowRangeRenderer = false
+    set(value){
+      field = value
+      EntityRangeDisplay.renderer = if (value) HeShaders.lowEntityRangeRenderer else HeShaders.entityRangeRenderer
+    }
   @ConfigItem var showAttackRange = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var showHealRange = true

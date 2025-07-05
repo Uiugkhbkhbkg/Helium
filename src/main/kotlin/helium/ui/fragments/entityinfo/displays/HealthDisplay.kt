@@ -9,29 +9,76 @@ import arc.graphics.g2d.GlyphLayout
 import arc.math.Mathf
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Table
-import arc.struct.Bits
 import arc.util.Align
 import arc.util.Scaling
 import arc.util.Tmp.c1
 import helium.He
 import helium.graphics.ClipDrawable
 import helium.ui.HeAssets
+import helium.ui.fragments.entityinfo.DisplayProvider
 import helium.ui.fragments.entityinfo.EntityInfoDisplay
-import helium.ui.fragments.entityinfo.Model
 import helium.ui.fragments.entityinfo.Side
+import helium.ui.fragments.entityinfo.TargetGroup
 import helium.util.runInst
 import mindustry.Vars
 import mindustry.core.UI
 import mindustry.gen.*
+import mindustry.gen.Unit
 import mindustry.graphics.Pal
 import mindustry.ui.Fonts
 import mindustry.ui.Styles
 import kotlin.math.max
 
-class HealthModel: Model<Healthc>{
-  override lateinit var entity: Healthc
-  override lateinit var disabledTeam: Bits
+class UnitHealthDisplayProv: BaseHealthDisplayProv(){
+  override val typeID: Int get() = 982347561
+  override fun targetGroup() = listOf(TargetGroup.unit)
+  override fun valid(entity: Posc) = entity is Unit
 
+  override fun provide(
+    entity: Healthc,
+    id: Int
+  ) = object: BaseHealthDisplay(style, entity, id){
+    override val typeID: Int get() = 982347561
+  }.apply {
+    shieldEnt = entity as? Shieldc
+    insectHealth = entity.health()
+    insectShield = shieldEnt?.shield()?: 0f
+  }
+}
+
+class BuildHealthDisplayProv: BaseHealthDisplayProv(){
+  override val hoveringOnly: Boolean get() = true
+  override val typeID: Int get() = 238907312
+  override fun targetGroup() = listOf(TargetGroup.build)
+  override fun valid(entity: Posc) = entity is Building
+
+  override fun provide(
+    entity: Healthc,
+    id: Int
+  ) = object: BaseHealthDisplay(style, entity, id){
+    override val typeID: Int get() = 238907312
+  }.apply {
+    shieldEnt = entity as? Shieldc
+    insectHealth = entity.health()
+    insectShield = shieldEnt?.shield()?: 0f
+  }
+}
+
+abstract class BaseHealthDisplayProv: DisplayProvider<Healthc, BaseHealthDisplay>(){
+  lateinit var style: HealthBarStyle
+  override fun enabled() = He.config.enableHealthBarDisplay
+  override fun buildConfig(table: Table) {
+    table.image(Icon.add).size(64f).scaling(Scaling.fit)
+    table.row()
+    table.add(Core.bundle["infos.healthDisplay"], Styles.outlineLabel)
+  }
+}
+
+abstract class BaseHealthDisplay(
+  val style: HealthBarStyle,
+  entity: Healthc,
+  id: Int
+): EntityInfoDisplay<Healthc>(entity, id){
   var detailWidth = 0f
   var shieldWidth = 0f
 
@@ -53,30 +100,12 @@ class HealthModel: Model<Healthc>{
 
   var shieldEnt: Shieldc? = null
 
-  override fun setup(ent: Healthc) {
-    shieldEnt = if (ent is Shieldc) ent else null
-    insectHealth = ent.health()
-    insectShield = shieldEnt?.shield()?: 0f
-  }
-
-  override fun reset() {
-    insectHealth = 0f
-    insectShield = 0f
-    hovering = false
-  }
-}
-
-class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
-  lateinit var style: HealthBarStyle
-
   override val layoutSide: Side = Side.TOP
-  override fun valid(entity: Posc) = entity is Healthc
-  override fun enabled() = He.config.enableHealthBarDisplay
 
-  override fun HealthModel.realWidth(prefSize: Float) = prefSize
-  override fun HealthModel.realHeight(prefSize: Float) = prefHeight
+  override fun realWidth(prefSize: Float) = prefSize
+  override fun realHeight(prefSize: Float) = prefHeight
 
-  override val HealthModel.prefWidth: Float get() = entity.let {
+  override val prefWidth: Float get() = entity.let {
     val minWidth = max(
       style.background.minWidth,
       style.texOffX + detailWidth + Scl.scl(20f) + shieldWidth + style.shieldPadRight
@@ -88,28 +117,22 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
       else -> minWidth
     }
   }
-  override val HealthModel.prefHeight: Float get() = style.height
+  override val prefHeight: Float get() = style.height
 
-  override fun buildConfig(table: Table) {
-    table.image(Icon.add).size(64f).scaling(Scaling.fit)
-    table.row()
-    table.add(Core.bundle["infos.healthDisplay"], Styles.outlineLabel)
+  override fun checkHolding(hovering: Boolean, isHold: Boolean): Boolean {
+    this.hovering = hovering
+    return hovering
   }
+  override fun shouldDisplay() = entity !is Building || hovering
 
-  override fun HealthModel?.checkHolding(isHold: Boolean, mouseHovering: Boolean): Boolean {
-    this?.hovering = isHold
-    return isHold
-  }
-  override fun HealthModel.shouldDisplay() = entity !is Building || hovering
-
-  override fun HealthModel.update(delta: Float) {
+  override fun update(delta: Float) {
     insectHealth = Mathf.lerp(insectHealth, entity.health(), delta*0.05f)
     shieldEnt?.also {
       insectShield = Mathf.lerp(insectShield, it.shield(), delta*0.05f)
     }
   }
 
-  override fun HealthModel.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
+  override fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
     val drawW = drawWidth/scale
     val drawH = drawHeight/scale
 
@@ -206,7 +229,7 @@ class HealthDisplay: EntityInfoDisplay<HealthModel>(::HealthModel){
     else -> throw RuntimeException("wtf?")
   }
 
-  private fun HealthModel.updateText(drawWidth: Float, scale: Float, alpha: Float){
+  private fun updateText(drawWidth: Float, scale: Float, alpha: Float){
     if (!hovering && He.config.hideHealthText) return
 
     if (detailCache.font != style.font) detailCache = FontCache(style.font)

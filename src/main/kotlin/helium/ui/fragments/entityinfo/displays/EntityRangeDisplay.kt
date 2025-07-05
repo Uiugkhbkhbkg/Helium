@@ -14,11 +14,8 @@ import arc.util.Time
 import arc.util.Tmp
 import helium.He
 import helium.graphics.DrawUtils
-import helium.graphics.HeShaders.entityRangeRenderer
-import helium.ui.fragments.entityinfo.ConfigPair
-import helium.ui.fragments.entityinfo.ConfigurableDisplay
-import helium.ui.fragments.entityinfo.Model
-import helium.ui.fragments.entityinfo.WorldDrawOnlyDisplay
+import helium.graphics.HeShaders
+import helium.ui.fragments.entityinfo.*
 import mindustry.game.Team
 import mindustry.gen.Building
 import mindustry.gen.Icon
@@ -38,38 +35,29 @@ import mindustry.world.blocks.units.RepairTower
 import mindustry.world.blocks.units.RepairTurret
 import mindustry.world.meta.BlockStatus
 
-class EntityRangeModel: Model<Ranged> {
-  override lateinit var entity: Ranged
-  override lateinit var disabledTeam: Bits
+class EntityRangeDisplayProvider: DisplayProvider<Ranged, EntityRangeDisplay>(), ConfigurableDisplay{
+  override val typeID: Int get() = 893475812
 
-  var building: Building? = null
-  var vis = 0f
-  var range = 0f
+  override fun targetGroup() = listOf(
+    TargetGroup.build,
+    TargetGroup.unit
+  )
+  override fun valid(entity: Posc): Boolean = entity is Ranged && entity !is ForceBuild
+  override fun enabled() = He.config.let {
+    it.enableRangeDisplay && (it.showAttackRange || it.showHealRange || it.showOverdriveRange)
+  }
 
-  var hovering = false
-  var isUnit = false
-  var isTurret = false
-  var isRepair = false
-  var isOverdrive = false
-
-  var timeOffset = 0f
-  var phaseOffset = 0f
-  var phaseScl = 0f
-
-  val color = Color()
-  var alpha = 0f
-
-  var layerID = 0
-  var layerOffset = 0f
-
-  override fun setup(ent: Ranged) {
+  override fun provide(
+    entity: Ranged,
+    id: Int
+  ) = EntityRangeDisplay(entity, id).apply {
     timeOffset = Mathf.random(240f)
     phaseOffset = Mathf.random(360f)
     phaseScl = Mathf.random(0.9f, 1.1f)
 
-    if (ent is Building) building = ent
+    if (entity is Building) building = entity
 
-    when(ent) {
+    when(entity) {
       is Unitc -> isUnit = true
       is BaseTurretBuild -> isTurret = true
       is RepairTurret.RepairPointBuild -> isRepair = true
@@ -78,67 +66,28 @@ class EntityRangeModel: Model<Ranged> {
       is OverdriveBuild -> isOverdrive = true
     }
 
-    layerID = when{
-      isUnit || isTurret -> {
-        color.set(ent.team().color)
-        alpha = 0.1f
-        ent.team().id
+    Core.app.post {
+      layerID = when{
+        isUnit || isTurret -> {
+          color.set(entity.team().color)
+          alpha = 0.1f
+          entity.team().id
+        }
+        isRepair -> {
+          color.set(Pal.heal)
+          alpha = 0.075f
+          260
+        }
+        isOverdrive -> {
+          color.set(0.731f, 0.522f, 0.425f, 1f)
+          alpha = 0.075f
+          261
+        }
+        else -> 300
       }
-      isRepair -> {
-        color.set(Pal.heal)
-        alpha = 0.075f
-        260
-      }
-      isOverdrive -> {
-        color.set(0.731f, 0.522f, 0.425f, 1f)
-        alpha = 0.075f
-        261
-      }
-      else -> 300
+      color.a(0.6f)
+      layerOffset = layerID*0.01f
     }
-    layerOffset = layerID*0.01f
-  }
-
-  override fun reset() {
-    hovering = false
-    isUnit = false
-    isTurret = false
-    isRepair = false
-    isOverdrive = false
-    layerID = 0
-    layerOffset = 0f
-    color.set(Color.clear)
-    alpha = 0f
-    vis = 0f
-  }
-}
-
-class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeModel), ConfigurableDisplay {
-  companion object {
-    private var coneDrawing = false
-
-    private val teamBits = Bits(Team.all.size)
-    private var dashes = 0f
-
-    fun resetMark(){
-      teamBits.clear()
-      coneDrawing = false
-      dashes = 0f
-    }
-  }
-
-  override fun EntityRangeModel.shouldDisplay() = vis > 0 && He.config.let {
-    ((isUnit || isTurret) && it.showAttackRange)
-    || (isRepair && it.showHealRange)
-    || (isOverdrive && it.showOverdriveRange)
-  }
-
-  override val worldRender: Boolean get() = true
-  override val screenRender: Boolean get() = false
-
-  override fun valid(entity: Posc): Boolean = entity is Ranged && entity !is ForceBuild
-  override fun enabled() = He.config.let {
-    it.enableRangeDisplay && (it.showAttackRange || it.showHealRange || it.showOverdriveRange)
   }
 
   override fun buildConfig(table: Table) {
@@ -146,7 +95,6 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     table.row()
     table.add(Core.bundle["infos.entityRange"], Styles.outlineLabel)
   }
-
   override fun getConfigures() = listOf(
     ConfigPair(
       "showAttackRange",
@@ -164,20 +112,70 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
       He.config::showOverdriveRange
     )
   )
+}
 
-  override fun EntityRangeModel.checkWorldClip(worldViewport: Rect) = (range*2).let { clipSize ->
+class EntityRangeDisplay(
+  entity: Ranged,
+  id: Int
+): WorldDrawOnlyDisplay<Ranged>(entity, id) {
+  override val typeID: Int get() = 893475812
+  var building: Building? = null
+  var vis = 0f
+  var range = 0f
+
+  var hovering = false
+  var isUnit = false
+  var isTurret = false
+  var isRepair = false
+  var isOverdrive = false
+
+  var timeOffset = 0f
+  var phaseOffset = 0f
+  var phaseScl = 0f
+
+  val color = Color(1f, 1f, 1f, 1f)
+  var alpha = 0f
+
+  var layerID = 0
+  var layerOffset = 0f
+
+  companion object {
+    private var coneDrawing = false
+
+    private val teamBits = Bits(Team.all.size)
+    private var dashes = 0f
+
+    var renderer = if (He.config.lowRangeRenderer) HeShaders.lowEntityRangeRenderer else HeShaders.entityRangeRenderer
+
+    fun resetMark(){
+      teamBits.clear()
+      coneDrawing = false
+      dashes = 0f
+    }
+  }
+
+  override fun shouldDisplay() = vis > 0 && He.config.let {
+    ((isUnit || isTurret) && it.showAttackRange)
+    || (isRepair && it.showHealRange)
+    || (isOverdrive && it.showOverdriveRange)
+  }
+
+  override val worldRender: Boolean get() = true
+  override val screenRender: Boolean get() = false
+
+  override fun checkWorldClip(entity: Posc, worldViewport: Rect) = (range*2).let { clipSize ->
     worldViewport.overlaps(
       entity.x - clipSize/2, entity.y - clipSize/2,
       clipSize, clipSize
     )
   }
 
-  override fun EntityRangeModel?.checkHolding(isHold: Boolean, mouseHovering: Boolean): Boolean {
-    this?.hovering = isHold
-    return isHold
+  override fun checkHolding(hovering: Boolean, isHold: Boolean): Boolean {
+    this.hovering = hovering || isHold
+    return hovering || isHold
   }
 
-  override fun EntityRangeModel.draw(alpha: Float) {
+  override fun draw(alpha: Float) {
     val a = (alpha/He.config.entityInfoAlpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
     val radius = range*a
     val layer = Layer.light - 3 + layerOffset
@@ -185,36 +183,40 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     if (!teamBits.get(layerID)){
       teamBits.set(layerID)
       Draw.drawRange(layer, 0.0045f, {
-        entityRangeRenderer.capture()
+        renderer.capture()
       }) {
-        entityRangeRenderer.alpha = this.alpha*He.config.entityInfoAlpha
-        entityRangeRenderer.render()
+        val ren = renderer
+        ren.alpha = this.alpha*He.config.entityInfoAlpha
+        ren.boundColor = color
+        ren.render()
       }
     }
 
     Draw.z(layer + 0.001f)
-    Draw.color(Color.black, color, a)
+    Draw.color(color)
     DrawUtils.fillCircle(entity.x, entity.y, radius - 1f)
 
-    Draw.z(layer + 0.002f)
-    val r = (Time.time*phaseScl + timeOffset)%240/240f
-    val inner = Interp.pow3.apply(r)
-    val outer = Interp.pow3Out.apply(r)
+    if (!He.config.lowRangeRenderer) {
+      Draw.z(layer + 0.002f)
+      val r = (Time.time*phaseScl + timeOffset)%240/240f
+      val inner = Interp.pow3.apply(r)
+      val outer = Interp.pow3Out.apply(r)
 
-    DrawUtils.innerCircle(
-      entity.x, entity.y,
-      inner*radius, outer*radius,
-      Tmp.c1.set(Color.white).a(0f), Color.white, 1
-    )
+      DrawUtils.innerCircle(
+        entity.x, entity.y,
+        inner*radius, outer*radius,
+        Tmp.c1.set(Color.white).a(0f), Color.white, 1
+      )
+    }
 
     Draw.z(layer + 0.003f)
     Lines.stroke(1f, Color.black)
-    DrawUtils.lineCircle(entity.x, entity.y, radius + 1f)
+    DrawUtils.lineCircle(entity.x, entity.y, radius)
 
     if (hovering) {
       Draw.z(Layer.light + 5)
       Draw.color(entity.team().color, 0.1f + Mathf.absin(8f, 0.15f))
-      if (isTurret && entity is TurretBuild) drawTurretAttackCone(entity as TurretBuild)
+      if (isTurret && entity is TurretBuild) drawTurretAttackCone(entity)
       else if (isUnit) drawUnitAttackCone(entity as Unitc)
     }
   }
@@ -250,11 +252,17 @@ class EntityRangeDisplay: WorldDrawOnlyDisplay<EntityRangeModel>(::EntityRangeMo
     )
   }
 
-  override fun EntityRangeModel.update(delta: Float) {
-    range = entity.range()
-    val to = building?.let {
-      if (it.status() != BlockStatus.noInput) 1f else 0f
-    }?:1f
+  var n = 30
+  var to = 0f
+  override fun update(delta: Float) {
+    if (n++ >= 30) {
+      range = entity.range()
+      to = building?.let {
+        if (it.status() !== BlockStatus.noInput) 1f else 0f
+      }?:1f
+
+      n = 0
+    }
     if (!Mathf.equal(vis, to)) vis = Mathf.approach(vis, to, delta*0.04f)
   }
 }

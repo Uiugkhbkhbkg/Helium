@@ -21,10 +21,7 @@ import helium.ui.HeStyles
 import helium.ui.dialogs.*
 import helium.ui.dialogs.modpacker.ModPackerDialog
 import helium.ui.fragments.entityinfo.EntityInfoFrag
-import helium.ui.fragments.entityinfo.displays.DetailsDisplay
-import helium.ui.fragments.entityinfo.displays.EntityRangeDisplay
-import helium.ui.fragments.entityinfo.displays.HealthDisplay
-import helium.ui.fragments.entityinfo.displays.StatusDisplay
+import helium.ui.fragments.entityinfo.displays.*
 import helium.ui.fragments.placement.HePlacementFrag
 import mindustry.Vars
 import mindustry.game.EventType
@@ -77,10 +74,11 @@ object He {
 
   lateinit var placement: HePlacementFrag
   lateinit var entityInfo: EntityInfoFrag
-  lateinit var healthBarDisplay: HealthDisplay
-  lateinit var statusDisplay: StatusDisplay
-  lateinit var detailsDisplay: DetailsDisplay
-  lateinit var entityRangeDisplay: EntityRangeDisplay
+  lateinit var unitHealthBarDisplay: UnitHealthDisplayProv
+  lateinit var buildHealthBarDisplay: BuildHealthDisplayProv
+  lateinit var statusDisplay: StatusDisplayProvider
+  lateinit var detailsDisplay: DetailsDisplayProvider
+  lateinit var entityRangeDisplay: EntityRangeDisplayProvider
 
   lateinit var configDialog: ModConfigDialog
   lateinit var heModsDialog: HeModsDialog
@@ -229,17 +227,19 @@ object He {
     Events.run(EventType.Trigger.update) { update() }
     Events.run(EventType.Trigger.draw) { drawWorld() }
 
-    Events.on(EventType.ResetEvent::class.java) { entityInfo.reset() }
+    //Events.on(EventType.ResetEvent::class.java) { entityInfo.reset() }
   }
 
   private fun setupDisplays(infos: EntityInfoFrag) {
-    infos.addDisplay(HealthDisplay().also { healthBarDisplay = it })
-    infos.addDisplay(StatusDisplay().also { statusDisplay = it })
+    infos.addDisplay(UnitHealthDisplayProv().also { unitHealthBarDisplay = it })
+    infos.addDisplay(BuildHealthDisplayProv().also { buildHealthBarDisplay = it })
+    infos.addDisplay(StatusDisplayProvider().also { statusDisplay = it })
 
-    infos.addDisplay(DetailsDisplay().also { detailsDisplay = it })
-    infos.addDisplay(EntityRangeDisplay().also { entityRangeDisplay = it })
+    infos.addDisplay(DetailsDisplayProvider().also { detailsDisplay = it })
+    infos.addDisplay(EntityRangeDisplayProvider().also { entityRangeDisplay = it })
 
-    healthBarDisplay.style = HeStyles.test
+    unitHealthBarDisplay.style = HeStyles.test
+    buildHealthBarDisplay.style = HeStyles.test
   }
 
   private fun setupSettings(conf: ModConfigDialog) {
@@ -297,6 +297,10 @@ object He {
       ConfigCheck(
         "enableRangeDisplay",
         config::enableRangeDisplay
+      ),
+      ConfigCheck(
+        "lowRangeRenderer",
+        config::lowRangeRenderer
       ),
       ConfigCheck(
         "showAttackRange",

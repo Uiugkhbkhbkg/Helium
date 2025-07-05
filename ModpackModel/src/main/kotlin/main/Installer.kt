@@ -142,6 +142,7 @@ class Installer: Mod() {
                   dialog.hide()
                   Core.app.post {
                     Vars.ui.showOkText(Core.bundle["misc.installComplete"], Core.bundle["dialog.installPack.complete"]){
+                      Vars.tmpDirectory.deleteDirectory()
                       Core.app.exit()
                     }
                   }

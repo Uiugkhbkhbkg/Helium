@@ -22,6 +22,8 @@
   "enableUnitStatusDisplay": true,
   //启用范围指示器
   "enableRangeDisplay": true,
+  //简化范围显示器的动画效果
+  "lowRangeRenderer": false,
   //显示实体攻击范围
   "showAttackRange": true,
   //显示修复范围

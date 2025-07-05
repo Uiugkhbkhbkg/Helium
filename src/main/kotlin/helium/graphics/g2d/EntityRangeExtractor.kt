@@ -9,7 +9,7 @@ import arc.graphics.gl.Shader
 import arc.util.Time
 import helium.Helium.Companion.getInternalFile
 
-class EntityRangeExtractor {
+class EntityRangeExtractor(val low: Boolean) {
   companion object {
     private val internalShaderDir: Fi = getInternalFile("shaders")
   }
@@ -23,13 +23,14 @@ class EntityRangeExtractor {
 
   var stroke = 2f
   var alpha = 0.075f
+  var boundColor = Color(1f, 1f, 1f, 1f)
 
   private lateinit var extractShader: Shader
 
   private fun setupShader() {
     extractShader = Shader(
       Core.files.internal("shaders/screenspace.vert"),
-      internalShaderDir.child("entity_range.frag")
+      internalShaderDir.child(if (low) "entity_range_low.frag" else "entity_range.frag")
     )
     buffer.resize(Core.graphics.width, Core.graphics.height)
   }
@@ -60,6 +61,7 @@ class EntityRangeExtractor {
       )
       it.setUniformf("u_stroke", stroke)
       it.setUniformf("u_alpha", alpha)
+      it.setUniformf("u_color", boundColor)
       it.setUniformi("u_texture", 0)
       buffer.blit(it)
     }

@@ -16,7 +16,10 @@ import arc.scene.ui.Label
 import arc.scene.ui.layout.Scl
 import arc.scene.ui.layout.Stack
 import arc.scene.ui.layout.Table
-import arc.struct.*
+import arc.struct.Bits
+import arc.struct.IntMap
+import arc.struct.ObjectSet
+import arc.struct.Seq
 import arc.util.Scaling
 import arc.util.Time
 import arc.util.Tmp
@@ -27,16 +30,16 @@ import helium.He.config
 import helium.addEventBlocker
 import helium.graphics.EdgeLineStripDrawable
 import helium.graphics.FillStripDrawable
+import helium.set
 import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.elements.roulette.StripButton
 import helium.ui.elements.roulette.StripButtonStyle
 import helium.ui.elements.roulette.StripWrap
 import helium.ui.fragments.entityinfo.Side.*
-import helium.util.MutablePair
 import helium.util.accessField
-import helium.util.mto
 import mindustry.Vars
+import mindustry.entities.Units
 import mindustry.game.Team
 import mindustry.gen.*
 import mindustry.gen.Unit
@@ -53,7 +56,6 @@ import kotlin.math.min
 
 class EntityInfoFrag {
   companion object {
-    private val tempEntry = EntityEntry()
     private val tmp = Vec2()
     private val outerStyle = HeStyles.clearS.copyWith(
       over = FillStripDrawable (
@@ -76,16 +78,20 @@ class EntityInfoFrag {
   }
 
   var controlling = false
+  private var shouldSetup = false
 
-  private val disabledTeams = ObjectMap<EntityInfoDisplay<*>, Bits>()
-  private val displays = Seq<EntityInfoDisplay<Model<*>>>()
+  private val disabledTeams = IntMap<Bits>()
+  private val providers = Seq<DisplayProvider<*, *>>()
+  private val hoveringProviders = Seq<DisplayProvider<*, *>>()
 
-  private val all = ObjectSet<EntityEntry>()
-  private val displayQueue = Seq<EntityEntry>()
+  private val entityEntries = IntMap<EntityEntry>()
+  private val hoveringEntries = IntMap<EntityEntry>()
+  private val hoveringList = Seq<EntityEntry>(EntityEntry::class.java) //foreach optimize
 
-  private val holding = OrderedSet<EntityEntry>()
-  private val currHov = OrderedSet<EntityEntry>()
-  private var mouseHovering: EntityEntry? = null
+  /**Indexed array, elements are repeatable, for all entries and hovering only entries*/
+  private val entriesList = Seq<EntityEntry>(EntityEntry::class.java)
+  private val hovering = ObjectSet<EntityEntry>()
+  private val holding = ObjectSet<EntityEntry>()
 
   private var selecting = false
   private var clearTimer = 0f
@@ -100,51 +106,70 @@ class EntityInfoFrag {
 
   /**for hot-update*/
   fun displaySetupUpdated(){
-    all.forEach { Pools.free(it) }
-    displayQueue.clear()
-    all.clear()
+    clearEntry()
+    shouldSetup = true
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun addDisplay(display: EntityInfoDisplay<*>) {
-    displays.add(display as EntityInfoDisplay<Model<*>>)
-    disabledTeams.put(display, Bits(256))
+  fun addDisplay(display: DisplayProvider<*, *>) {
+    if (display.hoveringOnly) hoveringProviders.add(display)
+    else providers.add(display)
+    disabledTeams.put(display.typeID, Bits(256))
     displaySetupUpdated()
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun addDisplayBefore(display: EntityInfoDisplay<*>, target: EntityInfoDisplay<*>){
-    val index = displays.indexOf(target)
-    display as EntityInfoDisplay<Model<*>>
-    if (index == -1) displays.add(display)
-    else displays.insert(index, display)
-    disabledTeams.put(display, Bits(256))
+  fun addDisplayBefore(display: DisplayProvider<*, *>, target: DisplayProvider<*, *>){
+    val list = if (display.hoveringOnly) hoveringProviders else providers
+
+    val index = list.indexOf(target)
+    if (index == -1) list.add(display)
+    else list.insert(index, display)
+    disabledTeams.put(display.typeID, Bits(256))
     displaySetupUpdated()
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun addDisplayAfter(display: EntityInfoDisplay<*>, target: EntityInfoDisplay<*>){
-    val index = displays.indexOf(target)
-    display as EntityInfoDisplay<Model<*>>
-    if (index == -1 || index == displays.size - 1) displays.add(display)
-    else displays.insert(index + 1, display)
-    disabledTeams.put(display, Bits(256))
+  fun addDisplayAfter(display: DisplayProvider<*, *>, target: DisplayProvider<*, *>){
+    val list = if (display.hoveringOnly) hoveringProviders else providers
+
+    val index = list.indexOf(target)
+    if (index == -1 || index == list.size - 1) list.add(display)
+    else list.insert(index + 1, display)
+    disabledTeams.put(display.typeID, Bits(256))
     displaySetupUpdated()
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun replaceDisplay(display: EntityInfoDisplay<*>, target: EntityInfoDisplay<*>) {
-    val index = displays.indexOf(target)
-    display as EntityInfoDisplay<Model<*>>
-    if (index != -1) displays[index] = display
+  fun replaceDisplay(display: DisplayProvider<*, *>, target: DisplayProvider<*, *>) {
+    val list = if (display.hoveringOnly) hoveringProviders else providers
+    val index = list.indexOf(target)
+    if (index != -1) list[index] = display
     displaySetupUpdated()
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun removeDisplay(display: EntityInfoDisplay<*>) {
-    displays.remove(display as EntityInfoDisplay<Model<*>>)
-    disabledTeams.remove(display)
+  fun removeDisplay(display: DisplayProvider<*, *>) {
+    if (display.hoveringOnly) hoveringProviders.remove(display)
+    else providers.remove(display)
+    disabledTeams.remove(display.typeID)
     displaySetupUpdated()
+  }
+
+  fun setupDisplay(){
+    val targets = ObjectSet<TargetGroup<*>>()
+    providers.forEach {
+      val groups = it.targetGroup()
+      if (groups.contains(TargetGroup.all) ) {
+        TargetGroup.all.apply(::addEntry, ::removeEntry, ::clearEntry)
+        return
+      }
+      else groups.forEach { group -> targets.add(group) }
+    }
+
+    targets.forEach {
+      it.apply(::addEntry, ::removeEntry, ::clearEntry)
+    }
   }
 
   fun toggleSwitchConfig() {
@@ -191,7 +216,7 @@ class EntityInfoFrag {
   private fun buildConfig(table: Table) {
     table.clearChildren()
 
-    var current: EntityInfoDisplay<*>? = null
+    var current: DisplayProvider<*, *>? = null
     val teams = Vars.state.teams.active
     val stack = Stack()
     stack.addEventBlocker()
@@ -301,8 +326,8 @@ class EntityInfoFrag {
           teamButtonDelta, r2 - r1
         )
         it.setDisabled { current == null }
-        it.update { it.isChecked = current?.let { dis -> !disabledTeams[dis].get(team.team.id) }?: false }
-        it.clicked { disabledTeams[current!!].flip(team.team.id) }
+        it.update { it.isChecked = current?.let { dis -> !disabledTeams[dis.typeID].get(team.team.id) }?: false }
+        it.clicked { disabledTeams[current!!.typeID].flip(team.team.id) }
       })
     }
 
@@ -313,8 +338,8 @@ class EntityInfoFrag {
       )
     })
 
-    val displayButtonDelta = 360f/displays.size
-    displays.forEachIndexed{ i, dis ->
+    val displayButtonDelta = 360f/providers.size
+    providers.forEachIndexed{ i, dis ->
       stack.add(StripButton(outerStyle){ dis.buildConfig(it) }.also {
         it.setCBounds(
           90f + displayButtonDelta*i, r2 + off,
@@ -378,6 +403,8 @@ class EntityInfoFrag {
   }
 
   fun build(parent: Group){
+    setupDisplay()
+
     infoFill = object: Group(){
       override fun draw() {
         if (!config.enableEntityInfoDisplay) return
@@ -387,22 +414,26 @@ class EntityInfoFrag {
 
       override fun act(delta: Float) {
         if (!config.enableEntityInfoDisplay){
-          if (all.any()) reset()
+          if (entityEntries.any()) clearEntry()
+          shouldSetup = true
           return
+        }
+        else if (shouldSetup) {
+          clearEntry()
+          setupEntry()
+          shouldSetup = false
         }
 
         super.act(delta)
 
         updateShowing()
-
-        this@EntityInfoFrag.also {
-          update(delta*60)
-        }
+        update(delta*60)
       }
     }
 
     parent.addChildAt(0, infoFill)
     infoFill.fillParent = true
+    infoFill.visible { Vars.state.isGame }
 
     parent.fill { config ->
       configPane = config
@@ -414,10 +445,90 @@ class EntityInfoFrag {
     }
   }
 
-  fun reset(){
-    all.forEach { Pools.free(it) }
-    all.clear()
-    displayQueue.clear()
+  @Suppress("UNCHECKED_CAST")
+  fun addEntry(entity: Entityc, hovering: Boolean = false): EntityEntry? {
+    if (entity !is Teamc) return null
+
+    val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
+    entry.entity = entity
+    entry.isHovering = hovering
+
+    (if (hovering) hoveringProviders else providers).forEach { prov ->
+      if (prov.enabled() && prov.valid(entity)) {
+        prov as DisplayProvider<Teamc, *>
+        val display = prov.provide(entity, entity.id())
+        Core.app.post { display.team = entity.team() } // post handle
+
+        if (display is InputEventChecker) {
+          prov as InputEventChecker
+          prov.element = prov.buildListener().also { elem -> infoFill.addChild(elem) }
+        }
+
+        entry.displays.add(display)
+      }
+    }
+
+    if (entry.displays.any()) {
+      if (hovering) {
+        hoveringEntries[entity.id()] = entry
+        entry.index1 = hoveringList.size
+        hoveringList.add(entry)
+      }
+      else entityEntries[entity.id()] = entry
+
+      entry.index = entriesList.size
+      entriesList.add(entry)
+
+      return entry
+    }
+
+    Pools.free(entry)
+    return null
+  }
+  fun removeEntry(entity: Entityc, hovering: Boolean = false) {
+    val ent = (if (hovering) hoveringEntries else entityEntries).remove(entity.id())
+    if (ent == null) return
+
+    if (hovering) hoveringList.removeIndexed(ent.index1) { e, i -> e.index1 = i }
+    entriesList.removeIndexed(ent.index) { e, i -> e.index = i }
+
+    ent.displays.forEach { display ->
+      if (display is InputEventChecker) display.element.remove()
+    }
+
+    Pools.free(ent)
+  }
+
+  private fun <T> Seq<T>.removeIndexed(index: Int, indexUpdater: (T, Int) -> kotlin.Unit) {
+    val end = size - 1
+    val items = items
+    items[index] = items[end]
+    indexUpdater(items[index], index)
+    items[end] = null
+    size--
+  }
+
+  fun setupEntry(){
+    clearEntry()
+
+    val targets = ObjectSet<TargetGroup<*>>()
+    providers.forEach {
+      val groups = it.targetGroup()
+      if (groups.contains(TargetGroup.all) ) {
+        Groups.all.forEach(::addEntry)
+        return
+      }
+      else groups.forEach { group -> targets.add(group) }
+    }
+
+    targets.forEach {
+      it.get().forEach(::addEntry)
+    }
+  }
+  fun clearEntry() {
+    entriesList.forEach { Pools.free(it) }
+    entriesList.clear()
+    entityEntries.clear()
   }
 
   fun drawWorld(){
@@ -444,7 +555,7 @@ class EntityInfoFrag {
     }
 
     if (controlling || Core.input.keyDown(config.entityInfoHotKey)) {
-      currHov.forEach { e ->
+      hovering.forEach { e ->
         val rad = e.size*1.44f + Mathf.absin(4f, 2f)
         val origX = e.entity.x
         val origY = e.entity.y
@@ -458,8 +569,8 @@ class EntityInfoFrag {
       }
     }
 
-    displayQueue.forEach { e ->
-      if (holding.contains(e)) {
+    entriesList.forEach { e ->
+      if (!hovering.contains(e)) {
         val rad = e.size*1.44f
         val ent = e.entity
         val origX = e.entity.x
@@ -485,21 +596,16 @@ class EntityInfoFrag {
         )
       }
 
-      e.display.forEach r@{ entry ->
-        val display = entry.first
-        if (!display.worldRender) return@r
-        val model = entry.second?:return@r
+      val a = if (e.isHovering) e.alpha*alpha else alpha
+      e.displays.forEach { display ->
+        if (!display.worldRender) return@forEach
 
-        if (model.disabledTeam.get(e.entity.team().id)) return@r
+        val disabledTeam = disabledTeams[display.typeID]
+        if (disabledTeam.get(display.team.id)) return@forEach
 
-        display.apply {
-          if (
-            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
-            || !model.shouldDisplay()
-            || !model.checkWorldClip(worldViewport)
-          ) return@r
-          model.drawWorld(alpha*e.alpha)
-        }
+        val e = entityEntries[display.id].entity
+        if (!display.shouldDisplay() || !display.checkWorldClip(e, worldViewport)) return@forEach
+        display.drawWorld(a)
       }
     }
   }
@@ -527,59 +633,28 @@ class EntityInfoFrag {
         selectionRect.set(mouse.x, mouse.y, 0f, 0f)
       }
     }
+    else selectionRect.set(mouse.x, mouse.y, 0f, 0f)
 
-    currHov.clear()
-    mouseHovering = null
-
-    fun letEntity(entity: Teamc) {
-      val e = tempEntry
-      e.entity = entity
-
-      val ent = all.get(e)
-      if (ent == null) {
-        val entry = Pools.obtain(EntityEntry::class.java) { EntityEntry() }
-        entry.entity = entity
-
-        assignDisplayModels(entry)
-
-        entry.isValid = !entry.display.isEmpty
-        entry.showing = true
-        all.add(entry)
-        if (entry.isValid) {
-          displayQueue.add(entry)
-
-          val res = checkHovering(entity)
-          if (res != 0) {
-            currHov.add(entry)
-            if (res == 1) mouseHovering = entry
-          }
-        }
-      }
-      else {
-        ent.showing = true
-
-        val res = checkHovering(entity)
-        if (ent.isValid && res != 0) {
-          currHov.add(ent)
-          if (res == 1) mouseHovering = ent
-        }
+    entriesList.forEach { it.player = null }
+    Groups.player.forEach { player ->
+      player.unit()?.also {
+        entityEntries[it.id]?.player = player
+        hoveringEntries[it.id]?.player = player
       }
     }
 
-    all.forEach { it.player = null }
-
-    Groups.all.forEach { entity ->
-      if (entity is Playerc) {
-        entity.unit()?.also {
-          val e = tempEntry
-          e.entity = it
-          all.get(e)?.player = entity
-        }
+    hovering.clear()
+    fun execEntity(ent: Teamc){
+      val id = ent.id()
+      var entry = hoveringEntries[id]
+      if (entry == null){
+        entry = addEntry(ent, true)
       }
+      entry.alpha = 1f
+      entry.showing = true
 
-      if (entity !is Teamc) return@forEach
-
-      letEntity(entity)
+      hovering.add(entry)
+      entityEntries[id]?.also { e -> hovering.add(e) }
     }
 
     val x1 = (selectionRect.x/Vars.tilesize).toInt()
@@ -590,79 +665,28 @@ class EntityInfoFrag {
       (y1..y2).forEach n@{ y ->
         val build = Vars.world.build(x, y)
         build?.also {
-          val e = tempEntry
-          e.entity = it
-          if (currHov.contains(e)) return@n
-          letEntity(it)
+          execEntity(it)
         }
       }
     }
 
+    Units.nearby(selectionRect) { unit -> execEntity(unit) }
+
     if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
-      if (currHov.isEmpty && Time.globalTime - clearTimer < 15f) holding.clear()
+      if (hovering.isEmpty && Time.globalTime - clearTimer < 15f) holding.clear()
       else {
-        var anyAdded = currHov.size > holding.size
-        currHov.forEach { hov ->
+        var anyAdded = hovering.size > holding.size
+        hovering.forEach { hov ->
           anyAdded = holding.add(hov) or anyAdded
         }
 
-        if (!anyAdded) currHov.forEach { holding.remove(it) }
+        if (!anyAdded) hovering.forEach { holding.remove(it) }
       }
 
       selecting = false
       selectStart.setZero()
-      selectionRect.set(0f, 0f, 0f, 0f)
     }
 
-    val itr = all.iterator()
-    while (itr.hasNext()) {
-      val entry = itr.next()
-
-      if (!entry.entity.isAdded) holding.remove(entry)
-
-      if (!entry.showing && !holding.contains(entry))
-        entry.alpha = Mathf.approach(entry.alpha, 0f, 0.025f*Time.delta)
-      else entry.alpha = 1f
-
-      entry.showing = false
-
-      if (entry.alpha <= 0.001f) {
-        itr.remove()
-        displayQueue.remove(entry)
-        Pools.free(entry)
-      }
-    }
-
-    if (!displayQueue.isEmpty) {
-      val v = tmp.set(Core.input.mouseWorld())
-      displayQueue.sort { e -> if (holding.contains(e)) -1f else e.entity.dst2(v) }
-    }
-  }
-
-  @Suppress("UNCHECKED_CAST")
-  private fun assignDisplayModels(entry: EntityEntry) {
-    val entity = entry.entity
-
-    displays.forEach { display ->
-      if (display.valid(entity) && display.enabled()) {
-        entry.display.add(
-          display mto
-          if (display.hoveringOnly) null
-          else {
-            val model = (display as EntityInfoDisplay<*>).obtainModel(entity)
-            model.disabledTeam = disabledTeams.get(display) { Bits() }
-            if (display is InputEventChecker<*>) {
-              display as InputEventChecker<InputCheckerModel<*>>
-              model as InputCheckerModel<*>
-              model.element = display.run { model.buildListener().also {
-                infoFill.addChild(it)
-              } }
-            }
-            model
-          }
-        )
-      }
-    }
   }
 
   private fun checkHovering(entity: Posc): Int {
@@ -677,7 +701,7 @@ class EntityInfoFrag {
         else 0
       }
       else -> {
-        if (entity.dst(mouse) < 25) 1
+        if (entity.dst2(mouse) < 25) 1
         else if ( rect.overlaps(
           entity.x - 5, entity.y - 5,
           10f, 10f
@@ -689,24 +713,9 @@ class EntityInfoFrag {
 
   @Suppress("UNCHECKED_CAST")
   private fun update(delta: Float) {
-    for (i in displayQueue.size - 1 downTo 0) {
-      val e = displayQueue[i]
-
-      e.display.forEach r@{
-        it.first.apply {
-          if (hoveringOnly && !it.second.checkHolding(checkIsHolding(e), mouseHovering == e)) return@r
-          if (it.second == null){
-            val model = obtainModel(e.entity)
-            model.disabledTeam = disabledTeams.get(this) { Bits() }
-            if (this is InputEventChecker<*>){
-              this as InputEventChecker<InputCheckerModel<*>>
-              model as InputCheckerModel
-              model.element = model.buildListener().also { elem -> infoFill.addChild(elem) }
-            }
-            it.second = model
-          }
-          it.second!!.update(delta)
-        }
+    entriesList.forEach { ent ->
+      ent.displays.forEach { dis ->
+        dis.update(delta)
       }
     }
   }
@@ -716,9 +725,8 @@ class EntityInfoFrag {
     val alpha = config.entityInfoAlpha
 
     Draw.sort(true)
-    for (i in displayQueue.size - 1 downTo 0) {
-      val e = displayQueue[i]
 
+    entriesList.forEach { e ->
       var offsetLeft = 0f
       var offsetRight = 0f
       var offsetTop = 0f
@@ -735,28 +743,24 @@ class EntityInfoFrag {
       val origX = origin.x
       val origY = origin.y
 
-      val a = e.alpha*alpha
-      e.display.forEach f@{ entry ->
-        val display = entry.first
+      val a = if (e.isHovering) e.alpha*alpha else alpha
+      e.displays.forEach f@{ display ->
         if (!display.screenRender) return@f
-        val model = entry.second?: return@f
-
-        if (model.disabledTeam.get(e.entity.team().id)) return@f
+        val disabledTeam = disabledTeams[display.typeID]
+        if (disabledTeam.get(display.team.id)) return@f
 
         display.apply {
-          if (
-            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
-            || !model.shouldDisplay()
-          ) return@f
+          if (!display.shouldDisplay()) return@f
           when (display.layoutSide) {
             CENTER -> {
-              centerWith = max(model.prefWidth, centerWith)
-              centerHeight = max(model.prefHeight, centerHeight)
+              centerWith = max(display.prefWidth, centerWith)
+              centerHeight = max(display.prefHeight, centerHeight)
             }
-            RIGHT -> rightHeight = max(model.prefHeight, rightHeight)
-            TOP -> topWidth = max(model.prefWidth, topWidth)
-            LEFT -> leftHeight = max(model.prefHeight, leftHeight)
-            BOTTOM -> bottomWidth = max(model.prefWidth, bottomWidth)
+
+            RIGHT -> rightHeight = max(display.prefHeight, rightHeight)
+            TOP -> topWidth = max(display.prefWidth, topWidth)
+            LEFT -> leftHeight = max(display.prefHeight, leftHeight)
+            BOTTOM -> bottomWidth = max(display.prefWidth, bottomWidth)
           }
         }
       }
@@ -765,10 +769,9 @@ class EntityInfoFrag {
       val sizeOrig = orig.x
       val sizeOff = Core.camera.project(e.size, 0f).x - sizeOrig
 
-      e.display.forEach f@{ entry ->
-        val display = entry.first
-        val model = entry.second?: return@f
-        if (model.disabledTeam.get(e.entity.team().id)) return@f
+      e.displays.forEach f@{ display ->
+        val disabledTeam = disabledTeams[display.typeID]
+        if (disabledTeam.get(display.team.id)) return@f
 
         val dir = if(display.layoutSide == CENTER) Tmp.p1.set(0, 0) else Geometry.d4(display.layoutSide.dir)
         val offset = Tmp.v1.set(sizeOff*dir.x, sizeOff*dir.y)
@@ -776,10 +779,7 @@ class EntityInfoFrag {
         val oy = origY + offset.y
 
         display.apply {
-          if (
-            (hoveringOnly && !model.checkHolding(checkIsHolding(e), mouseHovering == e))
-            || !model.shouldDisplay()
-          ) return@f
+          if (!display.shouldDisplay()) return@f
 
           val maxSizeMul = maxSizeMultiple
           val minSizeMul = minSizeMultiple
@@ -788,18 +788,18 @@ class EntityInfoFrag {
             CENTER -> {
               val disW = centerWith*scale
               val disH = centerHeight*scale
-              if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH/2, disW, disH))
-                model.draw(a, scale, ox - disW/2, oy - disH/2, disW, disH)
+              if (display.checkScreenClip(screenViewport, ox - disW/2, oy - disH/2, disW, disH))
+                display.draw(a, scale, ox - disW/2, oy - disH/2, disW, disH)
             }
             RIGHT -> {
-              val w = model.realWidth(rightHeight)
-              val h = model.realHeight(rightHeight)
+              val w = display.realWidth(rightHeight)
+              val h = display.realHeight(rightHeight)
               val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
               else min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
-              if (model.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
-                model.draw(a, scl, ox + offsetRight, oy - disH/2, disW, disH)
+              if (display.checkScreenClip(screenViewport, ox + offsetRight, oy - disH/2, disW, disH))
+                display.draw(a, scl, ox + offsetRight, oy - disH/2, disW, disH)
 
               offsetRight += disW
             }
@@ -815,38 +815,38 @@ class EntityInfoFrag {
                 else 0f
               }?: 0f
 
-              val w = model.realWidth(topWidth)
-              val h = model.realHeight(topWidth)
+              val w = display.realWidth(topWidth)
+              val h = display.realHeight(topWidth)
               val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
               else min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
-              if (model.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop + off, disW, disH))
-                model.draw(a, scl, ox - disW/2, oy + offsetTop + off, disW, disH)
+              if (display.checkScreenClip(screenViewport, ox - disW/2, oy + offsetTop + off, disW, disH))
+                display.draw(a, scl, ox - disW/2, oy + offsetTop + off, disW, disH)
 
               offsetTop += disH
             }
             LEFT -> {
-              val w = model.realWidth(leftHeight)
-              val h = model.realHeight(leftHeight)
+              val w = display.realWidth(leftHeight)
+              val h = display.realHeight(leftHeight)
               val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
               else min(max(maxSizeMul*sizeOff/h, minSizeMul*sizeOff/h*scale), scale)
               val disW = w*scl
               val disH = h*scl
-              if (model.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
-                model.draw(a, scl, ox - disW - offsetLeft, oy - disH/2, disW, disH)
+              if (display.checkScreenClip(screenViewport, ox - disW - offsetLeft, oy - disH/2, disW, disH))
+                display.draw(a, scl, ox - disW - offsetLeft, oy - disH/2, disW, disH)
 
               offsetLeft += disW
             }
             BOTTOM -> {
-              val w = model.realWidth(bottomWidth)
-              val h = model.realHeight(bottomWidth)
+              val w = display.realWidth(bottomWidth)
+              val h = display.realHeight(bottomWidth)
               val scl = if (maxSizeMul < 0 || minSizeMul < 0) scale
               else min(max(maxSizeMul*sizeOff/w, minSizeMul*sizeOff/w*scale), scale)
               val disW = w*scl
               val disH = h*scl
-              if (model.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))
-                model.draw(a, scl, ox - disW/2, oy - disH - offsetBottom, disW, disH)
+              if (display.checkScreenClip(screenViewport, ox - disW/2, oy - disH - offsetBottom, disW, disH))
+                display.draw(a, scl, ox - disW/2, oy - disH - offsetBottom, disW, disH)
 
               offsetBottom += disH
             }
@@ -859,20 +859,19 @@ class EntityInfoFrag {
   }
 
   private fun lineHeight() = Fonts.outline.capHeight*(0.25f/Scl.scl(1.0f)) + 3.0f
-
-  private fun checkIsHolding(e: EntityEntry) =
-    holding.contains(e) || ((controlling || Core.input.keyDown(config.entityInfoHotKey)) && currHov.contains(e))
 }
 
 class EntityEntry : Poolable {
   lateinit var entity: Teamc
+  var index = -1
+  var index1 = -1
   var player: Playerc? = null
 
+  var isHovering = false
   var alpha = 0f
   var showing = false
-  var isValid = false
 
-  val display = Seq<MutablePair<EntityInfoDisplay<Model<*>>, Model<*>?>>()
+  var displays = Seq<EntityInfoDisplay<*>>()
 
   var size: Float = -1f
     get() = if (field < 0) entity.let {
@@ -887,15 +886,12 @@ class EntityEntry : Poolable {
   override fun reset() {
     size = -1f
     player = null
-    display.forEach { e ->
-      e.second?.also {
-        if (it is InputCheckerModel) it.element.remove()
-        Pools.free(it)
-      }
-    }
+    alpha = 0f
+    isHovering = false
     showing = false
-    isValid = false
-    display.clear()
+    index = -1
+    index1 = -1
+    displays.clear()
   }
 
   override fun equals(other: Any?): Boolean {

@@ -26,15 +26,6 @@ void main() {
              texture2D(u_texture, v_texCoords + vec2(-1.0, 0.0) * v).a),
              texture2D(u_texture, v_texCoords + vec2(0.0, -1.0) * v).a);
 
-    float time = u_time*0.1;
-    float a =
-        sin((worldCoord.x + worldCoord.y)*0.0831 + time*0.0095) +
-        sin((-worldCoord.x + worldCoord.y)*0.075 + time*0.056) +
-        sin((worldCoord.x - worldCoord.y)*0.0546 + time*0.21) +
-        sin((-worldCoord.x - worldCoord.y)*0.03432 + time*0.712);
-
-    a = (a/4.0 + 1.0)/2.0;
-
     float s = length(base.rgb);
 
     float stepA = step(base.a, threshold);
@@ -45,8 +36,8 @@ void main() {
     float con2 = (1.0 - stepA)*(1.0 - con1);
 
     vec4 c1 = vec4(base.rgb, u_alpha);
-    vec4 c2 = vec4(vec3(1.0), u_alpha);
+    vec4 c2 = vec4(0.0);
 
-    gl_FragColor = (vec4(u_color.rgb*stepS + base.rgb*(1.0 - stepS), a))*con1
-        + (mix(c1, c2, a)*stepS + c1*(1.0 - stepS))*con2;
+    gl_FragColor = (u_color*stepS + base*(1.0 - stepS))*con1
+        + (c2*stepS + c1*(1.0 - stepS))*con2;
 }

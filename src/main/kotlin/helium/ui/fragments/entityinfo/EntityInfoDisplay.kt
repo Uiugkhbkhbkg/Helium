@@ -1,43 +1,51 @@
 package helium.ui.fragments.entityinfo
 
-import arc.func.Prov
+import arc.func.Cons
+import arc.math.geom.QuadTree
 import arc.math.geom.Rect
 import arc.scene.Element
 import arc.scene.ui.layout.Table
-import arc.struct.Bits
-import arc.util.pooling.Pool.Poolable
-import arc.util.pooling.Pools
-import mindustry.gen.Building
-import mindustry.gen.Drawc
-import mindustry.gen.Posc
+import arc.struct.IntMap
+import arc.struct.Seq
+import helium.util.accessField
+import mindustry.entities.EntityGroup
+import mindustry.entities.EntityIndexer
+import mindustry.game.Team
+import mindustry.gen.*
+import mindustry.gen.Unit
+import java.lang.reflect.Field
+
+abstract class DisplayProvider<E, T: EntityInfoDisplay<E>>{
+  abstract val typeID: Int
+  abstract fun targetGroup(): Iterable<TargetGroup<*>>
+  abstract fun valid(entity: Posc): Boolean
+  abstract fun enabled(): Boolean
+  abstract fun provide(entity: E, id: Int): T
+  open val hoveringOnly: Boolean get() = false
+
+  abstract fun buildConfig(table: Table)
+}
 
 @Suppress("UNCHECKED_CAST")
-abstract class EntityInfoDisplay<M: Model<*>>(
-  private val modelProv: Prov<M>
-) {
-  private val modelType = modelProv.get()::class.java as Class<M>
+abstract class EntityInfoDisplay<E>(
+  val entity: E,
+  val id: Int
+){
+  var team: Team = Team.derelict
+  var index: Int = -1
 
-  fun obtainModel(ent: Posc): M = (Pools.obtain(modelType, modelProv) as Model<Posc>)
-    .also {
-      it.entity = ent
-      it.setup(ent)
-    } as M
+  abstract val typeID: Int
 
   abstract val layoutSide: Side
-  open val hoveringOnly: Boolean get() = false
   open val screenRender: Boolean get() = true
   open val worldRender: Boolean get() = false
 
   open val maxSizeMultiple: Int get() = 6
   open val minSizeMultiple: Int get() = 2
 
-  abstract fun valid(entity: Posc): Boolean
-  abstract fun enabled(): Boolean
-
-  abstract fun buildConfig(table: Table)
-
-  open fun M?.checkHolding(isHold: Boolean, mouseHovering: Boolean) = isHold
-  open fun M.checkWorldClip(worldViewport: Rect) = (entity as Posc).let {
+  open fun checkHolding(hovering: Boolean, isHold: Boolean) = isHold
+  open fun checkMouseHovering(mouseHovering: Boolean) = mouseHovering
+  open fun checkWorldClip(entity: Posc, worldViewport: Rect) = entity.let {
     val clipSize = when(it){
       is Drawc -> it.clipSize()
       is Building -> it.block.clipSize
@@ -45,26 +53,20 @@ abstract class EntityInfoDisplay<M: Model<*>>(
     }
     worldViewport.overlaps(it.x - clipSize/2, it.y - clipSize/2, clipSize, clipSize)
   }
-  open fun M.checkScreenClip(screenViewport: Rect, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) =
+  open fun checkScreenClip(screenViewport: Rect, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) =
     screenViewport.overlaps(
       origX, origY,
       drawWidth, drawHeight
     )
-  open fun M.drawWorld(alpha: Float){}
+  open fun drawWorld(alpha: Float){}
 
-  abstract val M.prefWidth: Float
-  abstract val M.prefHeight: Float
-  open fun M.shouldDisplay() = true
-  abstract fun M.realWidth(prefSize: Float): Float
-  abstract fun M.realHeight(prefSize: Float): Float
-  abstract fun M.update(delta: Float)
-  abstract fun M.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float)
-}
-
-interface Model<E: Any>: Poolable{
-  var disabledTeam: Bits
-  var entity: E
-  fun setup(ent: E)
+  abstract val prefWidth: Float
+  abstract val prefHeight: Float
+  open fun shouldDisplay() = true
+  abstract fun realWidth(prefSize: Float): Float
+  abstract fun realHeight(prefSize: Float): Float
+  abstract fun update(delta: Float)
+  abstract fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float)
 }
 
 enum class Side(val dir: Int){
@@ -75,32 +77,101 @@ enum class Side(val dir: Int){
   BOTTOM(3)
 }
 
-abstract class NoneModelDisplay<T: Posc>: EntityInfoDisplay<Model<T>>(modelProv = Prov {
-  object : Model<T> {
-    override lateinit var disabledTeam: Bits
-    override lateinit var entity: T
-    override fun setup(ent: T) {}
-    override fun reset() {}
-  }
-})
-
-abstract class WorldDrawOnlyDisplay<M: Model<*>>(modelProv: Prov<M>): EntityInfoDisplay<M>(modelProv) {
+abstract class WorldDrawOnlyDisplay<E>(
+  entity: E,
+  id: Int
+): EntityInfoDisplay<E>(entity, id) {
   override val layoutSide: Side get() = Side.CENTER
-  override val M.prefWidth: Float get() = 0f
-  override val M.prefHeight: Float get() = 0f
-  override fun M.realWidth(prefSize: Float) = 0f
-  override fun M.realHeight(prefSize: Float) = 0f
-  override fun M.draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {}
-  override fun M.drawWorld(alpha: Float) {
+  override val prefWidth: Float get() = 0f
+  override val prefHeight: Float get() = 0f
+  override fun realWidth(prefSize: Float) = 0f
+  override fun realHeight(prefSize: Float) = 0f
+  override fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {}
+  override fun drawWorld(alpha: Float) {
     draw(alpha)
   }
-  abstract fun M.draw(alpha: Float)
+  abstract fun draw(alpha: Float)
 }
 
-interface InputCheckerModel<E: Any>: Model<E> {
+interface InputEventChecker{
   var element: Element
+  fun buildListener(): Element
 }
 
-interface InputEventChecker<T: InputCheckerModel<*>>{
-  fun T.buildListener(): Element
+class TargetGroup<T: Entityc>(private val target: Field) {
+  @Suppress("UNCHECKED_CAST")
+  private val origin = target.get(null) as EntityGroup<Entityc>
+
+  companion object {
+    private val EntityGroup<Entityc>.array: Seq<Entityc> by accessField("array")
+    private val EntityGroup<Entityc>.indexer: EntityIndexer? by accessField("indexer")
+    private var EntityGroup<Entityc>.map: IntMap<Entityc>? by accessField("map")
+    private var EntityGroup<Entityc>.tree: QuadTree<QuadTree.QuadTreeObject>? by accessField("tree")
+
+    val all = TargetGroup<Entityc>(Groups::class.java.getField("all"))
+
+    val build = TargetGroup<Building>(Groups::class.java.getField("build"))
+    val bullet = TargetGroup<Bullet>(Groups::class.java.getField("bullet"))
+    val draw = TargetGroup<Drawc>(Groups::class.java.getField("draw"))
+    val fire = TargetGroup<Fire>(Groups::class.java.getField("fire"))
+    val label = TargetGroup<WorldLabel>(Groups::class.java.getField("label"))
+    val player = TargetGroup<Player>(Groups::class.java.getField("player"))
+    val powerGraph = TargetGroup<PowerGraphUpdaterc>(Groups::class.java.getField("powerGraph"))
+    val puddle = TargetGroup<Puddle>(Groups::class.java.getField("puddle"))
+    val sync = TargetGroup<Syncc>(Groups::class.java.getField("sync"))
+    val unit = TargetGroup<Unit>(Groups::class.java.getField("unit"))
+    val weather = TargetGroup<WeatherState>(Groups::class.java.getField("weather"))
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun reset(){
+    val curr = target.get(null) as EntityGroup<Entityc>
+    if (curr == origin) return
+    origin.array.clear()
+    origin.array.addAll(curr.array)
+
+    target.set(null, origin)
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun get() = target.get(null) as EntityGroup<T>
+
+  @Suppress("UNCHECKED_CAST")
+  fun apply(put: Cons<T>, remove: Cons<T>, clear: Runnable){
+    val old = target.get(null) as EntityGroup<Entityc>
+    val type = old.array.items.javaClass.componentType() as Class<Entityc>
+    val new = object: EntityGroup<Entityc>(type, false, false, old.indexer){
+      override fun add(type: Entityc?) {
+        super.add(type)
+        put.get(type as T)
+      }
+
+      override fun remove(type: Entityc?) {
+        super.remove(type)
+        remove.get(type as T)
+      }
+      override fun removeIndex(type: Entityc?, position: Int) {
+        val rm = array.items[position] === type
+        super.removeIndex(type, position)
+        if (rm) remove.get(type as T)
+      }
+
+      override fun removeByID(id: Int) {
+        val t = map?.get(id) as? T
+        super.removeByID(id)
+        if (t != null) remove.get(t)
+      }
+
+      override fun clear() {
+        super.clear()
+        clear.run()
+      }
+    }
+
+    new.array.addAll(old.array)
+    new.map = old.map
+    new.tree = old.tree
+
+    target.set(null, new)
+  }
 }
