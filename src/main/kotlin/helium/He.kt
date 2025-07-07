@@ -330,6 +330,11 @@ object He {
         "enableBetterPlacement",
         config::enableBetterPlacement
       ),
+      ConfigSlider(
+        "blockColumns",
+        config::blockColumns,
+        4, 8, 1
+      ),
 
       ConfigSepLine(
         "modsDialog",

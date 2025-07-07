@@ -33,6 +33,8 @@
 
   //启用更好的放置面板
   "enableBetterPlacement": true,
+  //方块放置面板显示列数
+  "blockColumns": 5,
 
   //启用更好的mod设置页面
   "enableBetterModsDialog": true,

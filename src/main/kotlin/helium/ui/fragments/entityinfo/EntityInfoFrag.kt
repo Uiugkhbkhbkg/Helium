@@ -646,7 +646,7 @@ class EntityInfoFrag {
     hovering.clear(32)
     val team = Vars.player.team()
     fun execEntity(ent: Teamc){
-      if (!ent.isAdded || ent.inFogTo(team)) return
+      if (ent.inFogTo(team)) return
       val id = ent.id()
       var entry = hoveringEntries[id]
       if (entry == null){

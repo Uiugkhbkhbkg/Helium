@@ -664,7 +664,7 @@ class HePlacementFrag {
     rebuildCategory()
   }
 
-  private fun rebuildCategory() {
+  fun rebuildCategory() {
     blockTable.clear()
     blockTable.top().margin(5f)
 
@@ -673,9 +673,10 @@ class HePlacementFrag {
     val group = ButtonGroup<ImageButton>()
     group.setMinCheckCount(0)
 
+    val columns = config.blockColumns
     for (block in getUnlockedByCategory(currentCategory)) {
       if (!unlocked(block)) continue
-      if (index++%4 == 0) {
+      if (index++%columns == 0) {
         blockTable.row()
       }
 
