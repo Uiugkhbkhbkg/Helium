@@ -123,7 +123,7 @@ class EntityRangeDisplay(
   var vis = 0f
   var range = 0f
 
-  var hovering = false
+  var holding = false
   var isUnit = false
   var isTurret = false
   var isRepair = false
@@ -145,7 +145,11 @@ class EntityRangeDisplay(
     private val teamBits = Bits(Team.all.size)
     private var dashes = 0f
 
-    var renderer = if (He.config.lowRangeRenderer) HeShaders.lowEntityRangeRenderer else HeShaders.entityRangeRenderer
+    var renderer = when(He.config.rangeRenderLevel){
+      0 -> HeShaders.entityRangeRenderer
+      1 -> HeShaders.lowEntityRangeRenderer
+      else -> null
+    }
 
     fun resetMark(){
       teamBits.clear()
@@ -170,50 +174,60 @@ class EntityRangeDisplay(
     )
   }
 
-  override fun checkHolding(hovering: Boolean, isHold: Boolean): Boolean {
-    this.hovering = hovering || isHold
-    return hovering || isHold
-  }
-
   override fun draw(alpha: Float) {
     val a = (alpha/He.config.entityInfoAlpha*vis).let { if (it >= 0.999f) 1f else Interp.pow3Out.apply(it) }
     val radius = range*a
     val layer = Layer.light - 3 + layerOffset
 
-    if (!teamBits.get(layerID)){
-      teamBits.set(layerID)
-      Draw.drawRange(layer, 0.0045f, {
-        renderer.capture()
-      }) {
-        val ren = renderer
-        ren.alpha = this.alpha*He.config.entityInfoAlpha
-        ren.boundColor = color
-        ren.render()
+    renderer?.also { renderer ->
+      if (!teamBits.get(layerID)){
+        teamBits.set(layerID)
+        Draw.drawRange(layer, 0.0045f, {
+          renderer.capture()
+        }) {
+          renderer.alpha = this.alpha*He.config.entityInfoAlpha
+          renderer.boundColor = color
+          renderer.render()
+        }
       }
-    }
 
-    Draw.z(layer + 0.001f)
-    Draw.color(color)
-    DrawUtils.fillCircle(entity.x, entity.y, radius - 1f)
+      Draw.z(layer + 0.001f)
+      Draw.color(color)
+      DrawUtils.fillCircle(entity.x, entity.y, radius - 1f)
 
-    if (!He.config.lowRangeRenderer) {
-      Draw.z(layer + 0.002f)
-      val r = (Time.time*phaseScl + timeOffset)%240/240f
-      val inner = Interp.pow3.apply(r)
-      val outer = Interp.pow3Out.apply(r)
+      if (He.config.rangeRenderLevel == 0) {
+        Draw.z(layer + 0.002f)
+        val r = (Time.time*phaseScl + timeOffset)%240/240f
+        val inner = Interp.pow3.apply(r)
+        val outer = Interp.pow3Out.apply(r)
 
-      DrawUtils.innerCircle(
-        entity.x, entity.y,
-        inner*radius, outer*radius,
-        Tmp.c1.set(Color.white).a(0f), Color.white, 1
+        DrawUtils.innerCircle(
+          entity.x, entity.y,
+          inner*radius, outer*radius,
+          Tmp.c1.set(Color.white).a(0f), Color.white, 1
+        )
+      }
+
+      Draw.z(layer + 0.003f)
+      Lines.stroke(1f, Color.black)
+      DrawUtils.lineCircle(entity.x, entity.y, radius)
+    }?:run {
+      val pos = Core.camera.position
+      val dst = pos.dst(entity.x, entity.y)
+      val rate = 1f - Mathf.maxZero((dst - radius)/radius)
+
+      if (rate < 0.01f) return@run
+      Draw.z(layer)
+      Lines.stroke(1f)
+      Draw.color(color, color.a*rate)
+      DrawUtils.dashCircle(
+        entity.x, entity.y, radius,
+        8 + (radius/12).toInt(),
+        rotate = Time.time/radius*12 + timeOffset
       )
     }
 
-    Draw.z(layer + 0.003f)
-    Lines.stroke(1f, Color.black)
-    DrawUtils.lineCircle(entity.x, entity.y, radius)
-
-    if (hovering) {
+    if (holding) {
       Draw.z(Layer.light + 5)
       Draw.color(entity.team().color, 0.1f + Mathf.absin(8f, 0.15f))
       if (isTurret && entity is TurretBuild) drawTurretAttackCone(entity)
@@ -254,7 +268,8 @@ class EntityRangeDisplay(
 
   var n = 30
   var to = 0f
-  override fun update(delta: Float) {
+  override fun update(delta: Float, alpha: Float, isHovering: Boolean, isHolding: Boolean) {
+    holding = isHolding || isHovering
     if (n++ >= 30) {
       range = entity.range()
       to = building?.let {

@@ -144,7 +144,7 @@ class StatusDisplay(
     }
   }
 
-  override fun update(delta: Float) {
+  override fun update(delta: Float, alpha: Float, isHovering: Boolean, isHolding: Boolean) {
     val list = statusList
     list.clear()
     Vars.content.statusEffects().forEach { eff ->

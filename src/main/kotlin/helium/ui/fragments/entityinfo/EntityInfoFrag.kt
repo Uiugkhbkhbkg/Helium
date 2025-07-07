@@ -23,7 +23,6 @@ import arc.struct.Seq
 import arc.util.Scaling
 import arc.util.Time
 import arc.util.Tmp
-import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
 import helium.He
 import helium.He.config
@@ -53,6 +52,7 @@ import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 class EntityInfoFrag {
   companion object {
@@ -85,11 +85,11 @@ class EntityInfoFrag {
   private val hoveringProviders = Seq<DisplayProvider<*, *>>()
 
   private val entityEntries = IntMap<EntityEntry>()
-  private val hoveringEntries = IntMap<EntityEntry>()
-  private val hoveringList = Seq<EntityEntry>(EntityEntry::class.java) //foreach optimize
+  private val entriesList = Seq<EntityEntry>(EntityEntry::class.java)//Indexed array, elements are repeatable, for all entries and hovering only entries
 
-  /**Indexed array, elements are repeatable, for all entries and hovering only entries*/
-  private val entriesList = Seq<EntityEntry>(EntityEntry::class.java)
+  private val hoveringEntries = IntMap<EntityEntry>()
+  private val hoveringList = Seq<EntityEntry>(EntityEntry::class.java)//foreach optimize
+
   private val hovering = ObjectSet<EntityEntry>()
   private val holding = ObjectSet<EntityEntry>()
 
@@ -449,9 +449,7 @@ class EntityInfoFrag {
   fun addEntry(entity: Entityc, hovering: Boolean = false): EntityEntry? {
     if (entity !is Teamc) return null
 
-    val entry = Pools.obtain(EntityEntry::class.java){ EntityEntry() }
-    entry.entity = entity
-    entry.isHovering = hovering
+    val entry = EntityEntry(entity, hovering)
 
     (if (hovering) hoveringProviders else providers).forEach { prov ->
       if (prov.enabled() && prov.valid(entity)) {
@@ -460,8 +458,8 @@ class EntityInfoFrag {
         Core.app.post { display.team = entity.team() } // post handle
 
         if (display is InputEventChecker) {
-          prov as InputEventChecker
-          prov.element = prov.buildListener().also { elem -> infoFill.addChild(elem) }
+          display as InputEventChecker
+          display.element = display.buildListener().also { elem -> infoFill.addChild(elem) }
         }
 
         entry.displays.add(display)
@@ -557,24 +555,25 @@ class EntityInfoFrag {
     if (controlling || Core.input.keyDown(config.entityInfoHotKey)) {
       hovering.forEach { e ->
         val rad = e.size*1.44f + Mathf.absin(4f, 2f)
-        val origX = e.entity.x
-        val origY = e.entity.y
+        val ent = e.entity
+        val origX = ent.x
+        val origY = ent.y
 
         Draw.z(Layer.overlayUI)
         Drawf.poly(
           origX, origY, 4,
           rad, 0f,
-          if (holding.contains(e)) Color.crimson else Pal.accent
+          if (e.holding) Color.crimson else Pal.accent
         )
       }
     }
 
     entriesList.forEach { e ->
-      if (!hovering.contains(e)) {
+      if (!e.inFog && e.holding) {
         val rad = e.size*1.44f
         val ent = e.entity
-        val origX = e.entity.x
-        val origY = e.entity.y
+        val origX = ent.x
+        val origY = ent.y
 
         if (ent is Unit) {
           Draw.z(if (ent.isFlying) Layer.plans else Layer.groundUnit - 1f)
@@ -643,24 +642,26 @@ class EntityInfoFrag {
       }
     }
 
-    hovering.clear()
+    hovering.forEach { it.mouseHovering = false }
+    hovering.clear(32)
+    val team = Vars.player.team()
     fun execEntity(ent: Teamc){
+      if (!ent.isAdded || ent.inFogTo(team)) return
       val id = ent.id()
       var entry = hoveringEntries[id]
       if (entry == null){
         entry = addEntry(ent, true)
       }
-      entry.alpha = 1f
       entry.showing = true
 
-      hovering.add(entry)
-      entityEntries[id]?.also { e -> hovering.add(e) }
+      hovering.add(entry.also { it.mouseHovering = true })
+      entityEntries[id]?.also { e -> hovering.add(e.also { it.mouseHovering = true }) }
     }
 
-    val x1 = (selectionRect.x/Vars.tilesize).toInt()
-    val y1 = (selectionRect.y/Vars.tilesize).toInt()
-    val x2 = ((selectionRect.x + selectionRect.width)/Vars.tilesize).toInt()
-    val y2 = ((selectionRect.y + selectionRect.height)/Vars.tilesize).toInt()
+    val x1 = (selectionRect.x/Vars.tilesize).roundToInt()
+    val y1 = (selectionRect.y/Vars.tilesize).roundToInt()
+    val x2 = ((selectionRect.x + selectionRect.width)/Vars.tilesize).roundToInt()
+    val y2 = ((selectionRect.y + selectionRect.height)/Vars.tilesize).roundToInt()
     (x1..x2).forEach { x ->
       (y1..y2).forEach n@{ y ->
         val build = Vars.world.build(x, y)
@@ -670,52 +671,80 @@ class EntityInfoFrag {
       }
     }
 
-    Units.nearby(selectionRect) { unit -> execEntity(unit) }
+    if (selectionRect.width <= 4 || selectionRect.height <= 4) {
+      val v1 = selectionRect.getCenter(Tmp.v1)
+      Units.nearby(v1.x - 120f, v1.y - 120f, 240f, 240f) { unit ->
+        if (checkHovering(unit)) execEntity(unit)
+      }
+    }
+    else Units.nearby(selectionRect) { unit -> execEntity(unit) }
 
     if (selecting && !(hotkeyDown && Core.input.keyDown(Binding.select))){
-      if (hovering.isEmpty && Time.globalTime - clearTimer < 15f) holding.clear()
+      if (hovering.isEmpty && Time.globalTime - clearTimer < 15f) {
+        holding.forEach { it.holding = false }
+        holding.clear(32)
+      }
       else {
         var anyAdded = hovering.size > holding.size
         hovering.forEach { hov ->
-          anyAdded = holding.add(hov) or anyAdded
+          anyAdded = holding.add(hov.also { it.holding = true }) or anyAdded
         }
 
-        if (!anyAdded) hovering.forEach { holding.remove(it) }
+        if (!anyAdded) hovering.forEach {
+          holding.remove(it.also { e -> e.holding = false })
+        }
       }
 
       selecting = false
       selectStart.setZero()
     }
 
+    val list = hoveringList.items
+    var i = 0
+    while (i < hoveringList.size){
+      val e = list[i]
+      if (e.showing || e.holding) {
+        e.showing = false
+        e.alpha = Mathf.approachDelta(e.alpha, 1f, 0.05f)
+      }
+      else e.alpha = Mathf.approachDelta(e.alpha, 0f, 0.05f)
+
+      if (e.alpha <= 0){
+        removeEntry(e.entity, true)
+        i--
+      }
+      i++
+    }
   }
 
-  private fun checkHovering(entity: Posc): Int {
+  private fun checkHovering(entity: Posc): Boolean {
     val rect = selectionRect
-    val mouse = Core.input.mouseWorld()
 
     return when(entity){
       is QuadTree.QuadTreeObject -> {
         val box = Tmp.r1.also { entity.hitbox(it) }
-        if (box.contains(mouse)) 1
-        else if (rect.overlaps(box)) 2
-        else 0
+        rect.overlaps(box)
       }
       else -> {
-        if (entity.dst2(mouse) < 25) 1
-        else if ( rect.overlaps(
+        rect.overlaps(
           entity.x - 5, entity.y - 5,
           10f, 10f
-        )) 2
-        else 0
+        )
       }
     }
   }
 
   @Suppress("UNCHECKED_CAST")
   private fun update(delta: Float) {
+    val alpha = config.entityInfoAlpha
+    val playerTeam = Vars.player.team()
     entriesList.forEach { ent ->
+      val inFog = ent.entity.inFogTo(playerTeam)
+      ent.inFog = inFog
+      if (inFog) return@forEach
+      val a = if (ent.isHovering) ent.alpha*alpha else alpha
       ent.displays.forEach { dis ->
-        dis.update(delta)
+        dis.update(delta, a, ent.mouseHovering, ent.holding)
       }
     }
   }
@@ -727,6 +756,7 @@ class EntityInfoFrag {
     Draw.sort(true)
 
     entriesList.forEach { e ->
+      if (e.inFog) return@forEach
       var offsetLeft = 0f
       var offsetRight = 0f
       var offsetTop = 0f
@@ -739,7 +769,7 @@ class EntityInfoFrag {
       var centerWith = 0f
       var centerHeight = 0f
 
-      val origin = Core.camera.project(e.entity.x, e.entity.y)
+      val origin = e.entity.let { Core.camera.project(it.x, it.y) }
       val origX = origin.x
       val origY = origin.y
 
@@ -861,47 +891,38 @@ class EntityInfoFrag {
   private fun lineHeight() = Fonts.outline.capHeight*(0.25f/Scl.scl(1.0f)) + 3.0f
 }
 
-class EntityEntry : Poolable {
-  lateinit var entity: Teamc
+class EntityEntry(
+  val entity: Teamc,
+  val isHovering: Boolean
+) {
   var index = -1
   var index1 = -1
   var player: Playerc? = null
 
-  var isHovering = false
+  var mouseHovering = false
+  var holding = false
+  var inFog = false
+
   var alpha = 0f
   var showing = false
 
   var displays = Seq<EntityInfoDisplay<*>>()
 
-  var size: Float = -1f
-    get() = if (field < 0) entity.let {
-      field = when (it) {
-        is Hitboxc -> it.hitSize()/1.44f
-        is Building -> it.block.size*Vars.tilesize/2f
-        else -> 10f
-      }
-      field
-    } else field
-
-  override fun reset() {
-    size = -1f
-    player = null
-    alpha = 0f
-    isHovering = false
-    showing = false
-    index = -1
-    index1 = -1
-    displays.clear()
-  }
+  val size: Float
+    get() = entity.let { when (it) {
+      is Hitboxc -> it.hitSize()/1.44f
+      is Building -> it.block.size*Vars.tilesize/2f
+      else -> 10f
+    } }
 
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
     if (other !is EntityEntry) return false
-    return entity === other.entity
+    return entity === other.entity && isHovering == other.isHovering
   }
 
   override fun hashCode(): Int {
-    return entity.hashCode()
+    return entity.let { if (isHovering) it.id().inv() else it.id() }
   }
 }
 

@@ -239,12 +239,13 @@ object DrawUtils {
     val dashDeg = totalDashDeg / dashes
     val transDeg = totalTransDeg / dashes
     val step = dashDeg + transDeg
+    val sides = (360/dashDeg).toInt()*2
 
     for (i in 0 until dashes) {
       Lines.arc(
         x, y, radius,
         dashDeg/360f, rotate + i*step,
-        (360/dashDeg).toInt()*2
+        sides
       )
     }
   }

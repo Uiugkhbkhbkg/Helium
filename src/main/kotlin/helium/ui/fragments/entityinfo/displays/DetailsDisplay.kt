@@ -2,7 +2,6 @@ package helium.ui.fragments.entityinfo.displays
 
 import arc.Core
 import arc.math.Interp
-import arc.math.Mathf
 import arc.math.geom.Rect
 import arc.scene.Element
 import arc.scene.ui.layout.Table
@@ -39,7 +38,6 @@ class DetailsDisplayProvider: DisplayProvider<Displayable, DetailsDisplay>(){
     entity: Displayable,
     id: Int,
   ) = DetailsDisplay(entity, id).apply {
-    fadeOut = 0f
     hovering = false
     teamc = null
   }
@@ -54,7 +52,6 @@ class DetailsDisplay(
 
   var teamc: Teamc? = null
 
-  var fadeOut = 0f
   var hovering = false
   var clipped = false
 
@@ -114,29 +111,20 @@ class DetailsDisplay(
     return res
   }
 
-  override fun checkMouseHovering(mouseHovering: Boolean): Boolean {
-    if (mouseHovering) {
-      hovering = true
-      return true
-    }
-    hovering = false
-    return fadeOut > 0f
-  }
-
   override fun realWidth(prefSize: Float) = element.prefWidth
   override fun realHeight(prefSize: Float) = element.prefHeight
 
   override fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float) {
     val drawW = drawWidth/scale
     val drawH = drawHeight/scale
-    val r = Interp.pow4Out.apply(fadeOut)
+    val r = Interp.pow4Out.apply(alpha)
     element.scaleX = scale*r
     element.scaleY = scale
     element.setBounds(origX + drawWidth/2*(1 - r), origY, drawW, drawH)
   }
 
-  override fun update(delta: Float) {
-    fadeOut = Mathf.approach(fadeOut, if (hovering) 1f else 0f, delta*0.06f)
-    element.visible = !(fadeOut <= 0f || !clipped)
+  override fun update(delta: Float, alpha: Float, isHovering: Boolean, isHolding: Boolean) {
+    hovering = isHovering || isHolding
+    element.visible = !(alpha <= 0f || !clipped)
   }
 }

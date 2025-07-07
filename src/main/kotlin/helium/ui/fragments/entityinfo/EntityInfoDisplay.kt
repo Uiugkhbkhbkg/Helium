@@ -8,6 +8,8 @@ import arc.scene.ui.layout.Table
 import arc.struct.IntMap
 import arc.struct.Seq
 import helium.util.accessField
+import mindustry.Vars
+import mindustry.async.PhysicsProcess
 import mindustry.entities.EntityGroup
 import mindustry.entities.EntityIndexer
 import mindustry.game.Team
@@ -43,8 +45,6 @@ abstract class EntityInfoDisplay<E>(
   open val maxSizeMultiple: Int get() = 6
   open val minSizeMultiple: Int get() = 2
 
-  open fun checkHolding(hovering: Boolean, isHold: Boolean) = isHold
-  open fun checkMouseHovering(mouseHovering: Boolean) = mouseHovering
   open fun checkWorldClip(entity: Posc, worldViewport: Rect) = entity.let {
     val clipSize = when(it){
       is Drawc -> it.clipSize()
@@ -65,7 +65,7 @@ abstract class EntityInfoDisplay<E>(
   open fun shouldDisplay() = true
   abstract fun realWidth(prefSize: Float): Float
   abstract fun realHeight(prefSize: Float): Float
-  abstract fun update(delta: Float)
+  abstract fun update(delta: Float, alpha: Float, isHovering: Boolean, isHolding: Boolean)
   abstract fun draw(alpha: Float, scale: Float, origX: Float, origY: Float, drawWidth: Float, drawHeight: Float)
 }
 
@@ -98,7 +98,7 @@ interface InputEventChecker{
   fun buildListener(): Element
 }
 
-class TargetGroup<T: Entityc>(private val target: Field) {
+open class TargetGroup<T: Entityc>(private val target: Field) {
   @Suppress("UNCHECKED_CAST")
   private val origin = target.get(null) as EntityGroup<Entityc>
 
@@ -107,6 +107,7 @@ class TargetGroup<T: Entityc>(private val target: Field) {
     private val EntityGroup<Entityc>.indexer: EntityIndexer? by accessField("indexer")
     private var EntityGroup<Entityc>.map: IntMap<Entityc>? by accessField("map")
     private var EntityGroup<Entityc>.tree: QuadTree<QuadTree.QuadTreeObject>? by accessField("tree")
+    private var PhysicsProcess.group: EntityGroup<Unit> by accessField("group")
 
     val all = TargetGroup<Entityc>(Groups::class.java.getField("all"))
 
@@ -119,12 +120,25 @@ class TargetGroup<T: Entityc>(private val target: Field) {
     val powerGraph = TargetGroup<PowerGraphUpdaterc>(Groups::class.java.getField("powerGraph"))
     val puddle = TargetGroup<Puddle>(Groups::class.java.getField("puddle"))
     val sync = TargetGroup<Syncc>(Groups::class.java.getField("sync"))
-    val unit = TargetGroup<Unit>(Groups::class.java.getField("unit"))
+    val unit = object: TargetGroup<Unit>(Groups::class.java.getField("unit")){
+      override fun reset() {
+        super.reset()
+        Vars.asyncCore.processes
+          .filterIsInstance<PhysicsProcess>()
+          .first().group = Groups.unit
+      }
+      override fun apply(put: Cons<Unit>, remove: Cons<Unit>, clear: Runnable) {
+        super.apply(put, remove, clear)
+        Vars.asyncCore.processes
+          .filterIsInstance<PhysicsProcess>()
+          .first().group = Groups.unit
+      }
+    }
     val weather = TargetGroup<WeatherState>(Groups::class.java.getField("weather"))
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun reset(){
+  open fun reset(){
     val curr = target.get(null) as EntityGroup<Entityc>
     if (curr == origin) return
     origin.array.clear()
@@ -137,7 +151,7 @@ class TargetGroup<T: Entityc>(private val target: Field) {
   fun get() = target.get(null) as EntityGroup<T>
 
   @Suppress("UNCHECKED_CAST")
-  fun apply(put: Cons<T>, remove: Cons<T>, clear: Runnable){
+  open fun apply(put: Cons<T>, remove: Cons<T>, clear: Runnable){
     val old = target.get(null) as EntityGroup<Entityc>
     val type = old.array.items.javaClass.componentType() as Class<Entityc>
     val new = object: EntityGroup<Entityc>(type, false, false, old.indexer){

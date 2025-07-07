@@ -43,10 +43,14 @@ class HeConfig(configDir: Fi, internalSource: Fi) {
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
   @ConfigItem var enableRangeDisplay = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }
-  @ConfigItem var lowRangeRenderer = false
+  @ConfigItem var rangeRenderLevel = 0
     set(value){
       field = value
-      EntityRangeDisplay.renderer = if (value) HeShaders.lowEntityRangeRenderer else HeShaders.entityRangeRenderer
+      EntityRangeDisplay.renderer = when(value){
+        0 -> HeShaders.entityRangeRenderer
+        1 -> HeShaders.lowEntityRangeRenderer
+        else -> null
+      }
     }
   @ConfigItem var showAttackRange = true
     set(value){ field = value; He.entityInfo.displaySetupUpdated() }

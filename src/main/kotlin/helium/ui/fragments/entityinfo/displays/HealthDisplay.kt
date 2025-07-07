@@ -119,13 +119,8 @@ abstract class BaseHealthDisplay(
   }
   override val prefHeight: Float get() = style.height
 
-  override fun checkHolding(hovering: Boolean, isHold: Boolean): Boolean {
-    this.hovering = hovering
-    return hovering
-  }
-  override fun shouldDisplay() = entity !is Building || hovering
-
-  override fun update(delta: Float) {
+  override fun update(delta: Float, alpha: Float, isHovering: Boolean, isHolding: Boolean) {
+    hovering = isHovering || isHolding
     insectHealth = Mathf.lerp(insectHealth, entity.health(), delta*0.05f)
     shieldEnt?.also {
       insectShield = Mathf.lerp(insectShield, it.shield(), delta*0.05f)

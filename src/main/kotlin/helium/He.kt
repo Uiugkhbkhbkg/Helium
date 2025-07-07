@@ -298,10 +298,15 @@ object He {
         "enableRangeDisplay",
         config::enableRangeDisplay
       ),
-      ConfigCheck(
-        "lowRangeRenderer",
-        config::lowRangeRenderer
-      ),
+      ConfigSlider(
+        "rangeRenderLevel",
+        config::rangeRenderLevel,
+        0, 2, 1
+      ){ return@ConfigSlider when(it){
+        0 -> Core.bundle["range.animate.full"]
+        1 -> Core.bundle["range.animate.simplified"]
+        else -> Core.bundle["range.animate.prof"]
+      } },
       ConfigCheck(
         "showAttackRange",
         config::showAttackRange

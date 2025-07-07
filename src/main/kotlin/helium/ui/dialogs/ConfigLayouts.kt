@@ -17,9 +17,9 @@ import arc.util.Time
 import helium.invoke
 import helium.ui.UIUtils.line
 import helium.ui.dialogs.ModConfigDialog.ConfigLayout
+import helium.util.binds.CombinedKeys
 import mindustry.graphics.Pal
 import mindustry.ui.Styles
-import helium.util.binds.CombinedKeys
 import kotlin.reflect.KMutableProperty0
 
 class ConfigSepLine(
@@ -264,6 +264,17 @@ class ConfigSlider : ConfigEntry {
     field: KMutableProperty0<Int>,
     min: Int, max: Int, step: Int
   ) : this(name, { field.set(it.toInt()) }, { field.get().toFloat() }, min.toFloat(), max.toFloat(), step.toFloat())
+
+  constructor(
+    name: String,
+    field: KMutableProperty0<Int>,
+    min: Int, max: Int, step: Int,
+    show: Func<Int, String>,
+  ) : this(
+    name, { field.set(it.toInt()) }, { field.get().toFloat() },
+    min.toFloat(), max.toFloat(), step.toFloat(),
+    { f -> show(f.toInt()) }
+  )
 
   constructor(
     name: String,
