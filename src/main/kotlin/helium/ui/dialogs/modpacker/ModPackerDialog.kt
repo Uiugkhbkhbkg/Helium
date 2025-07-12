@@ -54,7 +54,7 @@ class ModPackerDialog: BaseDialog(Core.bundle["dialog.modPacker.title"]) {
   private var search = ""
   private var showAll = false
 
-  private var model = PackModel().also { initModel(it) }
+  private var model = PackModel()
 
   private lateinit var selectedTab: Table
   private lateinit var unselectedTab: Table

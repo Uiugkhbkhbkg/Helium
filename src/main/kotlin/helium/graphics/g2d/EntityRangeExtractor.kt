@@ -32,13 +32,15 @@ class EntityRangeExtractor(val low: Boolean) {
       Core.files.internal("shaders/screenspace.vert"),
       internalShaderDir.child(if (low) "entity_range_low.frag" else "entity_range.frag")
     )
-    buffer.resize(Core.graphics.width/2, Core.graphics.height/2)
+    if (low) buffer.resize(Core.graphics.width/2, Core.graphics.height/2)
+    else buffer.resize(Core.graphics.width, Core.graphics.height)
   }
 
   fun capture(){
     if (capturing) throw IllegalStateException("capturing already running")
 
-    buffer.resize(Core.graphics.width/2, Core.graphics.height/2)
+    if (low) buffer.resize(Core.graphics.width/2, Core.graphics.height/2)
+    else buffer.resize(Core.graphics.width, Core.graphics.height)
     buffer.begin(Color.clear)
     capturing = true
   }

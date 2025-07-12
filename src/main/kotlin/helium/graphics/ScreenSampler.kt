@@ -4,14 +4,25 @@ import arc.Core
 import arc.Events
 import arc.graphics.Color
 import arc.graphics.GL30
+import arc.graphics.GLTexture
 import arc.graphics.Gl
 import arc.graphics.g2d.Draw
 import arc.graphics.gl.FrameBuffer
+import arc.graphics.gl.GLFrameBuffer
 import arc.graphics.gl.Shader
 import arc.util.serialization.Jval
+import helium.util.accessField
+import mindustry.Vars
 import mindustry.game.EventType
+import mindustry.graphics.Layer
+import mindustry.graphics.Pixelator
 
 object ScreenSampler {
+  private val <T : GLTexture> GLFrameBuffer<T>.lastBoundFramebuffer: GLFrameBuffer<T>? by accessField("lastBoundFramebuffer")
+  private val Pixelator.buffer: FrameBuffer by accessField("buffer")
+
+  private val pixelatorBuffer by lazy { Vars.renderer.pixelator.buffer }
+
   private var worldBuffer: FrameBuffer? = null
   private var uiBuffer: FrameBuffer? = null
 
@@ -39,8 +50,17 @@ object ScreenSampler {
 
       Core.settings.put("sampler.setup", e.toString())
 
-      Events.run(EventType.Trigger.preDraw) { beginWorld() }
-      Events.run(EventType.Trigger.postDraw) { endWorld() }
+      Events.run(EventType.Trigger.preDraw) {
+        if (Vars.renderer.pixelate){
+          pixelatorBuffer.end()
+          beginWorld()
+          pixelatorBuffer.begin()
+        }
+        else beginWorld()
+      }
+      Events.run(EventType.Trigger.draw) {
+        Draw.draw(Layer.end + 0.001f) { endWorld() }
+      }
 
       Events.run(EventType.Trigger.uiDrawBegin) { beginUI() }
       Events.run(EventType.Trigger.uiDrawEnd) { endUI() }
@@ -76,6 +96,7 @@ object ScreenSampler {
   private fun endWorld() {
     currBuffer = null
     worldBuffer!!.end()
+    blitBuffer(worldBuffer!!, null)
   }
 
   private fun beginUI() {
@@ -106,13 +127,14 @@ object ScreenSampler {
       from.blit(HeShaders.baseScreen)
     }
     else {
+      val target = to?:from.lastBoundFramebuffer
       Gl.bindFramebuffer(GL30.GL_READ_FRAMEBUFFER, from.framebufferHandle)
-      Gl.bindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, to?.framebufferHandle ?: 0)
+      Gl.bindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, target?.framebufferHandle ?: 0)
       Core.gl30.glBlitFramebuffer(
         0, 0, from.width, from.height,
         0, 0,
-        to?.width ?: Core.graphics.width,
-        to?.height ?: Core.graphics.height,
+        target?.width ?: Core.graphics.width,
+        target?.height ?: Core.graphics.height,
         Gl.colorBufferBit, Gl.nearest
       )
     }

@@ -2,7 +2,6 @@ package helium.ui.dialogs.modpacker
 
 import arc.Core
 import arc.files.Fi
-import arc.files.ZipFi
 import arc.graphics.Texture
 import arc.scene.style.Drawable
 import arc.struct.ObjectSet
@@ -47,7 +46,6 @@ class PackModel {
     var stat: Int
   ){
     var enabled = false
-    val root = if (fi.isDirectory) fi else ZipFi(fi)
 
     constructor(loadedMod: Mods.LoadedMod): this(
       loadedMod.file,

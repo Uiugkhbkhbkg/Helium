@@ -146,7 +146,7 @@ object ModpackUtil {
             write.write(bytes.toByteArray())
           }
           else {
-            write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.${m.fi.extension()}"))
+            write.putNextEntry(JarEntry("mods/${m.name}-${m.version}.${f.extension()}"))
             write.write(f.readBytes())
           }
         }
