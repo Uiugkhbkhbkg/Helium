@@ -16,6 +16,7 @@ import arc.struct.ObjectMap
 import arc.util.Log
 import arc.util.Strings
 import helium.graphics.HeShaders
+import helium.graphics.ShieldRenderer
 import helium.ui.HeAssets
 import helium.ui.HeStyles
 import helium.ui.dialogs.*
@@ -72,6 +73,8 @@ object He {
   lateinit var config: HeConfig
   lateinit var global: Settings
 
+  lateinit var heShield: ShieldRenderer
+
   lateinit var placement: HePlacementFrag
   lateinit var entityInfo: EntityInfoFrag
   lateinit var unitHealthBarDisplay: UnitHealthDisplayProv
@@ -106,6 +109,9 @@ object He {
 
     global = genGlobal()
     global.load()
+
+    heShield = ShieldRenderer()
+    //heShield.setup()
 
     HeAssets.load()
     HeShaders.load()

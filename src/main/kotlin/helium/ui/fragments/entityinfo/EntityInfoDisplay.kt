@@ -153,7 +153,7 @@ open class TargetGroup<T: Entityc>(private val target: Field) {
   @Suppress("UNCHECKED_CAST")
   open fun apply(put: Cons<T>, remove: Cons<T>, clear: Runnable){
     val old = target.get(null) as EntityGroup<Entityc>
-    val type = old.array.items.javaClass.componentType() as Class<Entityc>
+    val type = old.array.items.javaClass.componentType as Class<Entityc>
     val new = object: EntityGroup<Entityc>(type, false, false, old.indexer){
       override fun add(type: Entityc?) {
         super.add(type)

@@ -54,7 +54,7 @@ class PackModel {
       loadedMod.meta.shortDescription(),
       loadedMod.meta.description,
       loadedMod.meta.version,
-      loadedMod.meta.author,
+      loadedMod.meta.author?:Core.bundle["misc.unknow"],
       loadedMod.meta.dependencies,
       loadedMod.iconTexture,
       loadedMod.minMajor,
