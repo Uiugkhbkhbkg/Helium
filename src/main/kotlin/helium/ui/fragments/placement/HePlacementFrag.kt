@@ -65,6 +65,8 @@ class HePlacementFrag {
     private var currBlock: Block?
       get() = Vars.control.input.block
       set(value) { Vars.control.input.block = value }
+
+    private val savePattern = Regex("^save#((\\w|-)+)-fast-slot-\\d+-\\d+$")
   }
 
   private val toolEntries = OrderedMap<String, ToolEntry>()
@@ -117,9 +119,27 @@ class HePlacementFrag {
 
         rebuildCategory()
 
-        invSlots.forEach { it.load() }
+        loadSlots()
       }
     }
+  }
+
+  fun loadSlots(){
+    invSlots.forEach { it.load() }
+  }
+
+  fun cleanGlobal(){
+    val saves = Vars.control.saves.saveSlots
+      .map { it.file.nameWithoutExtension() }
+      .toSet()
+
+    He.global.keys()
+      .filter { savePattern.matches(it) }
+      .associateBy { savePattern.find(it)?.groupValues[1] }
+      .filter { it.key !in saves }
+      .forEach {
+        He.global.remove(it.value)
+      }
   }
 
   fun addTool(
@@ -945,14 +965,20 @@ class HePlacementFrag {
     }
 
     fun save(){
+      val currPlanet = if (Vars.state.isCampaign) Vars.state.planet?.let {"sector#${ "${it.name}" }}"} ?: "#unknow"
+      else "save#${Vars.control.saves.current.file.nameWithoutExtension().replace("-", "_")}"
+
       blocks.forEachIndexed { i, block ->
-        He.global.put("fast-slot-$id-$i", block?.name?:"!empty")
+        He.global.put("${currPlanet}-fast-slot-$id-$i", block?.name?:"!empty")
       }
     }
 
     fun load(){
+      val currPlanet = if (Vars.state.isCampaign) Vars.state.planet?.let {"sector#${ "${it.name}" }}"} ?: "#unknow"
+      else "save#${Vars.control.saves.current.file.nameWithoutExtension().replace("-", "_")}"
+
       for (i in 0 until blocks.size) {
-        val name = He.global.getString("fast-slot-$id-$i", "!empty")
+        val name = He.global.getString("${currPlanet}-fast-slot-$id-$i", "!empty")
 
         blocks[i] = Vars.content.block(name)
       }

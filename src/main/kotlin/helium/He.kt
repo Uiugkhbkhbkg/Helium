@@ -119,6 +119,7 @@ object He {
 
     placement = HePlacementFrag()
     setupTools(placement)
+    placement.cleanGlobal()
     placement.build(Vars.ui.hudGroup)
 
     entityInfo = EntityInfoFrag()
