@@ -2,8 +2,7 @@ package helium.ui.fragments.placement
 
 import arc.Core
 import arc.Events
-import arc.func.Boolp
-import arc.func.Prov
+import arc.func.*
 import arc.graphics.Color
 import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Lines
@@ -22,10 +21,7 @@ import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.*
 import arc.scene.ui.Tooltip.Tooltips
 import arc.scene.ui.layout.*
-import arc.struct.ObjectFloatMap
-import arc.struct.ObjectMap
-import arc.struct.OrderedMap
-import arc.struct.Seq
+import arc.struct.*
 import arc.util.Align
 import arc.util.Time
 import arc.util.Tmp
@@ -35,9 +31,11 @@ import helium.ui.HeAssets
 import helium.ui.UIUtils.line
 import helium.ui.elements.HeCollapser
 import helium.util.accessField
+import helium.util.ifInst
 import mindustry.Vars
 import mindustry.ai.UnitCommand
 import mindustry.ai.UnitStance
+import mindustry.ai.types.CommandAI
 import mindustry.content.Blocks
 import mindustry.core.UI
 import mindustry.game.EventType
@@ -46,6 +44,7 @@ import mindustry.game.EventType.WorldLoadEvent
 import mindustry.gen.Call
 import mindustry.gen.Icon
 import mindustry.gen.Tex
+import mindustry.gen.Unit
 import mindustry.graphics.Pal
 import mindustry.input.Binding
 import mindustry.input.InputHandler
@@ -253,30 +252,49 @@ class HePlacementFrag {
 
   private fun buildCommands(table: Table) {
     table.touchable = Touchable.enabled
-    table.add(Core.bundle.get("commandmode.name")).fill().center().labelAlign(Align.center).width(200f).row()
+    table.add(Core.bundle.get("commandmode.name")).fill().center().labelAlign(Align.center).row()
     table.image().color(Pal.accent).growX().pad(20f).padTop(0f).padBottom(4f).row()
     table.table { u ->
+      val activeCommands = Bits(Vars.content.unitCommands().size)
+      val activeStances = Bits(Vars.content.unitStances().size)
+
+      val availableCommands = Bits(Vars.content.unitCommands().size)
+      val availableStances = Bits(Vars.content.unitStances().size)
+
       u.left()
       val curCount = intArrayOf(0)
+      val usedCommands = Bits(Vars.content.unitCommands().size)
       val commands = Seq<UnitCommand>()
 
-      var currentCommand: UnitCommand? = null
-      var currentStance: UnitStance? = null
-
+      val usedStances = Bits(Vars.content.unitStances().size)
       val stances = Seq<UnitStance>()
+      val stancesOut = Seq<UnitStance>()
 
-      val rebuildCommand = Runnable {
+      val rebuildCommand = {
         u.clearChildren()
         val units = Vars.control.input.selectedUnits
         if (units.size > 0) {
-          val counts = IntArray(Vars.content.units().size)
-          for (unit in units) {
-            counts[unit.type.id.toInt()]++
-          }
+          usedCommands.clear()
+          usedStances.clear()
           commands.clear()
           stances.clear()
-          var firstCommand = false
-          var firstStance = false
+
+          val counts = IntArray(Vars.content.units().size)
+
+          for (unit in units) {
+            counts[unit.type.id.toInt()]++
+
+            stancesOut.clear()
+            unit.type.getUnitStances(unit, stancesOut)
+
+            for (stance in stancesOut) {
+              if (!usedStances.get(stance.id.toInt())) {
+                stances.add(stance)
+                usedStances.set(stance.id.toInt())
+              }
+            }
+          }
+
           val unitlist = u.table().growX().left().get()
           unitlist.left()
 
@@ -284,21 +302,21 @@ class HePlacementFrag {
           for (i in counts.indices) {
             if (counts[i] > 0) {
               val type = Vars.content.unit(i)
-              unitlist.add(StatValues.stack(type, counts[i])).pad(4f).with { b ->
-                b.clearListeners()
+              unitlist.add<Stack?>(StatValues.stack(type, counts[i])).pad(4f).with { b: Stack? ->
+                b!!.clearListeners()
                 b.addListener(Tooltips.getInstance().create(type.localizedName, false))
 
                 val listener = ClickListener()
 
                 //left click -> select
                 b.clicked(KeyCode.mouseLeft) {
-                  Vars.control.input.selectedUnits.removeAll { unit -> unit.type !== type }
-                  Events.fire(EventType.Trigger.unitCommandChange)
+                  Vars.control.input.selectedUnits.removeAll(Boolf { unit: Unit? -> unit!!.type !== type })
+                  Events.fire<EventType.Trigger?>(EventType.Trigger.unitCommandChange)
                 }
                 //right click -> remove
                 b.clicked(KeyCode.mouseRight) {
-                  Vars.control.input.selectedUnits.removeAll { unit -> unit.type === type }
-                  Events.fire(EventType.Trigger.unitCommandChange)
+                  Vars.control.input.selectedUnits.removeAll(Boolf { unit: Unit? -> unit!!.type === type })
+                  Events.fire<EventType.Trigger?>(EventType.Trigger.unitCommandChange)
                 }
 
                 b.addListener(listener)
@@ -314,22 +332,11 @@ class HePlacementFrag {
                 unitlist.row()
               }
 
-              if (!firstCommand) {
-                commands.add(type.commands)
-                firstCommand = true
-              }
-              else {
-                //remove commands that this next unit type doesn't have
-                commands.removeAll { com -> !type.commands.contains(com) }
-              }
-
-              if (!firstStance) {
-                stances.add(type.stances)
-                firstStance = true
-              }
-              else {
-                //remove commands that this next unit type doesn't have
-                stances.removeAll { st -> !type.stances.contains(st) }
+              for (command in type.commands) {
+                if (!usedCommands.get(command.id.toInt())) {
+                  commands.add(command)
+                  usedCommands.set(command.id.toInt())
+                }
               }
             }
           }
@@ -338,13 +345,19 @@ class HePlacementFrag {
           if (commands.size > 1) {
             u.row()
 
-            u.table { coms ->
-              coms.left()
+            u.table { coms: Table? ->
+              coms!!.left()
               var scol = 0
               for (command in commands) {
                 coms.button(Icon.icons.get(command.icon, Icon.cancel), Styles.clearNoneTogglei) {
-                  Call.setUnitCommand(Vars.player, units.mapInt { un -> un.id }.toArray(), command)
-                }.checked { i -> currentCommand === command }.size(50f)
+                  Call.setUnitCommand(
+                    Vars.player,
+                    units.mapInt(
+                      Intf { un: Unit? -> un!!.id },
+                      Boolf { un: Unit? -> un!!.type.allowCommand(un, command) }).toArray(),
+                    command
+                  )
+                }.checked { activeCommands.get(command.id.toInt()) }.size(50f)
                   .tooltip(command.localized(), true)
 
                 if (++scol%6 == 0) coms.row()
@@ -357,16 +370,23 @@ class HePlacementFrag {
             u.row()
 
             if (commands.size > 1) {
-              u.add(Image(Tex.whiteui)).height(3f).color(Pal.gray).pad(7f).growX().row()
+              u.add<Image?>(Image(Tex.whiteui)).height(3f).color(Pal.gray).pad(7f).growX().row()
             }
 
             u.table { coms ->
               coms.left()
               var scol = 0
               for (stance in stances) {
-                coms.button(Icon.icons.get(stance.icon, Icon.cancel), Styles.clearNoneTogglei) {
-                  Call.setUnitStance(Vars.player, units.mapInt { un -> un.id }.toArray(), stance)
-                }.checked { i -> currentStance === stance }.size(50f)
+                coms.button(stance.getIcon(), Styles.clearNoneTogglei) {
+                  Call.setUnitStance(
+                    Vars.player,
+                    units.mapInt(
+                      Intf { un: Unit? -> un!!.id },
+                      Boolf { un: Unit? -> un!!.type.allowStance(un, stance) }).toArray(),
+                    stance,
+                    !activeStances.get(stance.id.toInt())
+                  )
+                }.checked { activeStances.get(stance.id.toInt()) }.size(50f)
                   .tooltip(stance.localized(), true)
 
                 if (++scol%6 == 0) coms.row()
@@ -375,77 +395,74 @@ class HePlacementFrag {
           }
         }
         else {
-          u.add(Core.bundle.get("commandmode.nounits")).color(Color.lightGray).growX().center()
-            .labelAlign(Align.center).pad(6f)
+          u.add(Core.bundle.get("commandmode.nounits"))
+            .color(Color.lightGray).growX().center().labelAlign(Align.center).pad(6f)
         }
       }
 
       u.update {
-        var hadCommand = false
-        var hadStance = false
-        var shareCommand: UnitCommand? = null
-        var shareStance: UnitStance? = null
+        run {
+          activeCommands.clear()
+          activeStances.clear()
+          availableCommands.clear()
+          availableStances.clear()
 
-        for (unit in Vars.control.input.selectedUnits) {
-          if (unit.isCommandable) {
-            val nextCommand = unit.command().command
-
-            if (hadCommand) {
-              if (shareCommand !== nextCommand) {
-                shareCommand = null
-              }
-            }
-            else {
-              shareCommand = nextCommand
-              hadCommand = true
+          //find the command that all units have, or null if they do not share one
+          for (unit in Vars.control.input.selectedUnits) {
+            unit.controller().ifInst<CommandAI>{
+              activeCommands.set(it.command.id.toInt())
+              activeStances.set(it.stances)
             }
 
-            val nextStance = unit.command().stance
+            stancesOut.clear()
+            unit.type.getUnitStances(unit, stancesOut)
 
-            if (hadStance) {
-              if (shareStance !== nextStance) {
-                shareStance = null
-              }
+            for (stance in stancesOut) {
+              availableStances.set(stance.id.toInt())
             }
-            else {
-              shareStance = nextStance
-              hadStance = true
+
+            for (command in unit.type.commands) {
+              availableCommands.set(command.id.toInt())
             }
           }
-        }
 
-        currentCommand = shareCommand
-        currentStance = shareStance
-
-        val size = Vars.control.input.selectedUnits.size
-        if (curCount[0] != size) {
-          curCount[0] = size
-          rebuildCommand.run()
-        }
-
-        //not a huge fan of running input logic here, but it's convenient as the stance arrays are all here...
-        for (stance in stances) {
-          //first stance must always be the stop stance
-          if (stance.keybind != null && Core.input.keyTap(stance.keybind)) {
-            Call.setUnitStance(
-              Vars.player,
-              Vars.control.input.selectedUnits.mapInt { un -> un.id }.toArray(),
-              stance
-            )
+          val size = Vars.control.input.selectedUnits.size
+          if (curCount[0] != size || (usedCommands != availableCommands) || (usedStances != availableStances)) {
+            if (curCount[0] + size != 0) {
+              rebuildCommand()
+            }
+            curCount[0] = size
           }
-        }
-        for (command in commands) {
-          //first stance must always be the stop stance
-          if (command.keybind != null && Core.input.keyTap(command.keybind)) {
-            Call.setUnitCommand(
-              Vars.player,
-              Vars.control.input.selectedUnits.mapInt { un -> un.id }.toArray(),
-              command
-            )
+
+          //not a huge fan of running input logic here, but it's convenient as the stance arrays are all here...
+          for (stance in stances) {
+            //first stance must always be the stop stance
+            if (stance.keybind != null && Core.input.keyTap(stance.keybind)) {
+              Call.setUnitStance(
+                Vars.player,
+                Vars.control.input.selectedUnits.mapInt(
+                  Intf { un: Unit? -> un!!.id },
+                  Boolf { un: Unit? -> un!!.type.allowStance(un, stance) }).toArray(),
+                stance,
+                !activeStances.get(stance.id.toInt())
+              )
+            }
+          }
+          for (command in commands) {
+            //first stance must always be the stop stance
+            if (command.keybind != null && Core.input.keyTap(command.keybind)) {
+              Call.setUnitCommand(
+                Vars.player,
+                Vars.control.input.selectedUnits.mapInt(
+                  Intf { un: Unit? -> un!!.id },
+                  Boolf { un: Unit? -> un!!.type.allowCommand(un, command) }).toArray(),
+                command
+              )
+            }
           }
         }
       }
-      rebuildCommand.run()
+      rebuildCommand()
     }.grow()
   }
 
